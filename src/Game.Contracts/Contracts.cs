@@ -17,7 +17,7 @@ public sealed record PortView(int A, int B, Resource? Resource);
 public sealed record PlayerView(string Id, bool Ready, bool Connected, bool Surrendered, int ResourceCount,
     int DevelopmentCardCount, int PublicPoints, int Knights, int RoadLength,
     IReadOnlyList<int>? Resources, IReadOnlyList<Card>? Cards, int? TotalPoints);
-public sealed record TradeView(int Id, string From, string To, IReadOnlyList<int> Give, IReadOnlyList<int> Take);
+public sealed record TradeView(int Id, string From, string? To, IReadOnlyList<int> Give, IReadOnlyList<int> Take);
 public sealed record StartingRollView(int Round, string Player, int First, int Second);
 public sealed record DiceRollView(int First, int Second, int Total, IReadOnlyList<int> ResourcesReceived, IReadOnlyDictionary<string,int> PlayerResourceCounts);
 public sealed record GameView(Guid GameId, string RoomCode, long Version, Phase Phase, string Host, string? ActivePlayer,

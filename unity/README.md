@@ -66,10 +66,18 @@ For future online multiplayer, implement an authenticated network transport and 
 
 ## Validation status
 
-The .NET build, 95 automated tests, shared Unity wire DTOs/process transport against the actual host, and published Linux x64 executable are exercised in the cloud environment. The self-contained publication test runs without dotnet on PATH. `scripts/check.sh` also runs the existing 1,000 complete seeded games.
+The .NET build, 99 automated tests, shared Unity wire DTOs/process transport against the actual host, and published Linux x64 executable are exercised in the cloud environment. The self-contained publication test runs without dotnet on PATH. `scripts/check.sh` also runs the existing 1,000 complete seeded games.
 
 Unity Editor is not installed in the cloud machine. Editor import, shader/scene rendering, mouse picking, Play mode, and standalone Unity builds have not been executed here; verify these with steps 4–10 on your machine. Other operating systems' self-contained publications are documented but untested. The original all-inactive rule proposal remains pending in `docs/DECISIONS.md`.
 
 ### Classic settlement distance
 
 Every settlement must leave an empty intersection between itself and every other settlement/city, including friendly buildings. The user confirmed keeping this classic rule. Normal settlements also require an owned connecting road; initial placements do not.
+
+### Production and trading
+
+Every roll except seven produces for all eligible players, regardless of who rolled: a settlement receives one resource per adjacent matching hex and a city receives two. The robber blocks its hex; limited bank supply can prevent production. The dice receipt shows your own resources received and public totals for other players.
+
+During your action phase, open **Trade**, select the quantities to give and receive, choose **Anyone** or a named player, and submit the offer. Switch to another player's hand to inspect and accept it. Acceptance checks both players' current resources and completes the exchange once; outstanding offers end with the turn. The creator can cancel an open offer.
+
+For **Bank / port trade**, give a single resource type and receive a different type. The displayed ratio is 4:1 normally, 3:1 with your settlement/city on a generic port, or 2:1 for the resource matching an owned specific port. The bank must have the requested cards.

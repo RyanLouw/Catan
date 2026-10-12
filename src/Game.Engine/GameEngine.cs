@@ -128,8 +128,8 @@ public sealed partial class GameEngine
                 Require(gi != ti && give[gi] == receive[ti] * Ratio(s, p, (Resource)gi), "Incorrect bank/port ratio.");
                 Pay(s, p, give); TakeBank(s, p, receive); break;
             case CommandKind.OfferTrade:
-                Current(s, p, Phase.Action); int to = Find(s, c.OtherPlayer ?? "");
-                Require(to >= 0 && to != p && !s.Players[to].Surrendered && s.Players[to].Connected, "Choose an available trading partner.");
+                Current(s,p,Phase.Action);int to=c.OtherPlayer==null?-1:Find(s,c.OtherPlayer);
+                Require(c.OtherPlayer==null?s.Players.Where((x,i)=>i!=p).Any(x=>x.Connected&&!x.Surrendered):to>=0&&to!=p&&!s.Players[to].Surrendered&&s.Players[to].Connected,"Choose an available trading partner.");
                 int[] offer = Bundle(c.Give), want = Bundle(c.Take);
                 Require(offer.Sum() > 0 && want.Sum() > 0 && !offer.Where((x, i) => x > 0 && want[i] > 0).Any(), "Trade distinct resource types in both directions.");
                 Require(Has(player, offer), "Insufficient offered resources.");
@@ -137,7 +137,7 @@ public sealed partial class GameEngine
             case CommandKind.AcceptTrade:
                 Require(s.Phase == Phase.Action, "Trading requires the action phase.");
                 var trade = s.Trades.FirstOrDefault(t => t.Id == c.Target);
-                Require(trade != null && trade.To == p && trade.From == s.Active, "No matching trade offer.");
+                Require(trade != null && (trade.To == p || trade.To == -1) && trade.From != p && trade.From == s.Active, "No matching trade offer.");
                 Require(!s.Players[trade!.From].Surrendered && s.Players[trade.From].Connected, "Offering player is unavailable.");
                 Require(Has(s.Players[trade.From], trade.Give) && Has(player, trade.Take), "Trade resources are no longer available.");
                 for (int i = 0; i < 5; i++) { s.Players[trade.From].Resources[i] += trade.Take[i] - trade.Give[i]; player.Resources[i] += trade.Give[i] - trade.Take[i]; }

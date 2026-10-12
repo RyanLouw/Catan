@@ -21,7 +21,7 @@ public sealed partial class GameEngine
                 s.Players.Select((p, i) => new PlayerView(p.Id, p.Ready, p.Connected, p.Surrendered, p.Resources.Sum(), p.Cards.Count,
                     Points(s, i, false), p.Knights, RoadLength(s, i), i == owner ? (int[])p.Resources.Clone() : null,
                     i == owner ? p.Cards.Select(c => c.Kind).ToArray() : null, i == owner ? Points(s, i, true) : null)).ToArray(),
-                s.Trades.Select(t => new TradeView(t.Id, s.Players[t.From].Id, s.Players[t.To].Id, (int[])t.Give.Clone(), (int[])t.Take.Clone())).ToArray(),
+                s.Trades.Select(t => new TradeView(t.Id, s.Players[t.From].Id, t.To<0?null:s.Players[t.To].Id, (int[])t.Give.Clone(), (int[])t.Take.Clone())).ToArray(),
                 s.Discards.ToDictionary(kv => s.Players[kv.Key].Id, kv => kv.Value), s.Victims.Select(v => s.Players[v].Id).ToArray(), s.Deck.Count, s.ActionDeadline, s.RollDeadline, s.NextPhase,
                 s.FirstDie.HasValue ? new DiceRollView(s.FirstDie.Value,s.SecondDie!.Value,s.Roll!.Value,
                     s.Production.TryGetValue(owner,out var received)?(int[])received.Clone():new int[5],

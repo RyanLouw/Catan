@@ -25,7 +25,7 @@ namespace Catan.Client
         private long renderedVersion=-1,stagedVersion=-1;
         private string renderedActor,lastGame;
         private float scale;
-        private Vector2 offset,mouse;
+        private Vector2 offset,mouse,tradeScroll;
         private readonly Rect viewport=new Rect(265,112,1320,550);
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap(){if(FindFirstObjectByType<CatanPrototype>()==null)new GameObject("Catan table").AddComponent<CatanPrototype>();}
@@ -104,7 +104,7 @@ namespace Catan.Client
                 if(created==null||!created.Success)return;
                 foreach(string p in players){var ready=await Send(new HostRequest{Op="command",Viewer=p,Command=Intent("Ready",p,1)},token,false);if(ready==null||!ready.Success)return;}
                 var start=await Send(new HostRequest{Op="command",Viewer=players[0],Command=Intent("Start",players[0])},token);
-                if(start!=null&&start.Success){modal="";partner=players[1];}
+                if(start!=null&&start.Success){modal="";partner="";}
             }
             catch(Exception e){status=e.Message;}
             finally{busy=false;}
@@ -156,7 +156,7 @@ namespace Catan.Client
         private bool MyTurn=>response!=null&&response.View.ActivePlayer==actor;
         private Participant Me=>response?.View.Players.FirstOrDefault(p=>p.Id==actor);
         private void ResetBundles(){Array.Clear(give,0,5);Array.Clear(take,0,5);}
-        private void Open(string dialog){ResetBundles();modal=dialog;if(response!=null&&(partner==actor||!response.View.Players.Any(p=>p.Id==partner)))partner=response.View.Players.First(p=>p.Id!=actor).Id;}
+        private void Open(string dialog){ResetBundles();modal=dialog;if(response!=null&&(partner==actor||(!string.IsNullOrEmpty(partner)&&!response.View.Players.Any(p=>p.Id==partner))))partner="";}
         private void OnGUI()
         {
             if(skin==null||board==null)return;
@@ -262,7 +262,7 @@ namespace Catan.Client
                 float x=285+i*172;skin.Box(new Rect(x,714,156,70),skin.Panel);skin.Icon(new Rect(x+10,728,42,42),resources[i],ResourceColor(i));
                 skin.Text(new Rect(x+63,715,80,35),Me.Resources[i].ToString(),27);int gained=response.View.Dice?.ResourcesReceived[i]??0;skin.Text(new Rect(x+63,752,85,25),resources[i]+(gained>0?" +"+gained:""),15,gained>0?skin.Gold:skin.Muted);
             }
-            bool offers=response.View.Trades.Any(t=>t.To==actor);
+            bool offers=response.View.Trades.Any(t=>t.From!=actor&&(t.To==actor||t.To==null));
             if(skin.Button(new Rect(1195,710,180,70),"Roll dice",!busy&&MyTurn&&response.View.Phase=="AwaitRoll",true))Execute(Intent("Roll",actor));
             skin.Icon(new Rect(1204,726,26,26),"Dice",skin.Background);
             if(skin.Button(new Rect(1390,710,180,70),offers?"Trade offer":"Trade",!busy&&response.View.Phase=="Action"&&(MyTurn||offers)))Open("Trade");
@@ -334,7 +334,8 @@ namespace Catan.Client
             if(trade)
             {
                 skin.Text(new Rect(510,260,130,35),"Partner",18);float x=650;
-                foreach(var p in response.View.Players.Where(p=>p.Id!=actor)){if(skin.Button(new Rect(x,254,190,40),p.Id+(partner==p.Id?" ✓":""),!busy))partner=p.Id;x+=210;}
+                if(skin.Button(new Rect(x,254,152,40),"Anyone"+(partner==""?" ✓":""),!busy))partner="";x+=160;
+                foreach(var p in response.View.Players.Where(p=>p.Id!=actor)){if(skin.Button(new Rect(x,254,152,40),p.Id+(partner==p.Id?" ✓":""),!busy))partner=p.Id;x+=160;}
             }
             skin.Text(new Rect(820,302,185,30),discard?"Discard":"Give",18,skin.Muted);skin.Text(new Rect(1080,302,190,30),"Receive",18,skin.Muted);
             for(int i=0;i<5;i++)
@@ -349,13 +350,16 @@ namespace Catan.Client
             else if(trade)
             {
                 if(skin.Button(new Rect(515,660,260,50),"Bank / port trade",!busy&&MyTurn,true))Trade("BankTrade");
-                if(skin.Button(new Rect(790,660,260,50),"Offer to "+partner,!busy&&MyTurn))Trade("OfferTrade");
-                int row=0;foreach(var offer in response.View.Trades.Where(t=>t.To==actor||t.From==actor))
+                if(skin.Button(new Rect(790,660,260,50),"Offer to "+(string.IsNullOrEmpty(partner)?"anyone":partner),!busy&&MyTurn))Trade("OfferTrade");
+                var available=response.View.Trades.Where(t=>t.To==actor||t.From==actor||t.To==null).ToArray();
+                tradeScroll=GUI.BeginScrollView(new Rect(510,718,820,75),tradeScroll,new Rect(0,0,800,Math.Max(75,available.Length*45)));
+                int row=0;foreach(var offer in available)
                 {
-                    if(row>=2)break;float y=725+row*45;skin.Text(new Rect(510,y,500,36),offer.From+" gives "+BundleText(offer.Give)+" for "+BundleText(offer.Take),14);
-                    if(offer.To==actor&&skin.Button(new Rect(1020,y,145,35),"Accept",!busy)){Execute(Intent("AcceptTrade",actor,offer.Id));}
-                    if(skin.Button(new Rect(1180,y,145,35),"Cancel offer",!busy))Execute(Intent("CancelTrade",actor,offer.Id));row++;
+                    float y=row*45;skin.Text(new Rect(0,y,500,36),offer.From+" gives "+BundleText(offer.Give)+" for "+BundleText(offer.Take),14);
+                    if(offer.From!=actor&&(offer.To==actor||offer.To==null)&&skin.Button(new Rect(510,y,135,35),"Accept",!busy)){Execute(Intent("AcceptTrade",actor,offer.Id));}
+                    if((offer.From==actor||offer.To==actor)&&skin.Button(new Rect(655,y,135,35),"Cancel offer",!busy))Execute(Intent("CancelTrade",actor,offer.Id));row++;
                 }
+                GUI.EndScrollView();
             }
             if(!discard&&skin.Button(new Rect(1090,660,240,50),"Close",!busy))modal="";
             skin.Text(new Rect(490,805,870,45),status,18,skin.Ink,TextAnchor.MiddleCenter);
@@ -366,7 +370,7 @@ namespace Catan.Client
             skin.Text(new Rect(x+50,y,58,40),values[i].ToString(),23,skin.Ink,TextAnchor.MiddleCenter);
             if(skin.Button(new Rect(x+115,y,45,40),"+",!busy&&values[i]<limit))values[i]++;
         }
-        private void Trade(string kind){var cmd=Intent(kind,actor);cmd.OtherPlayer=partner;cmd.Give=(int[])give.Clone();cmd.Take=(int[])take.Clone();Execute(cmd);}
+        private void Trade(string kind){var cmd=Intent(kind,actor);cmd.OtherPlayer=string.IsNullOrEmpty(partner)?null:partner;cmd.Give=(int[])give.Clone();cmd.Take=(int[])take.Clone();Execute(cmd);}
         private string BundleText(int[] bundle)=>string.Join(", ",resources.Where((r,i)=>bundle[i]>0).Select(r=>bundle[Array.IndexOf(resources,r)]+" "+r));
         private void Cards()
         {

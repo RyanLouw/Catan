@@ -66,6 +66,25 @@ public sealed class TradeAndProductionTests
         Assert.Equal(0, s.Players[0].Resources[0]); Assert.Equal(0, s.Players[1].Resources[0]); Assert.Equal(1, s.Bank[0]);
         s.Buildings.Remove(2); GameEngine.Produce(s, 6); Assert.Equal(1, s.Players[0].Resources[0]); Assert.Equal(0, s.Bank[0]); e.Validate();
     }
+    [Fact]
+    public void TheSameRollCanProduceResourcesForEveryPlayerNotOnlyTheRoller()
+    {
+        for(ulong seed=1;seed<=100;seed++)
+        {
+            var e=Started(seed);var s=e.TestState;s.Buildings.Clear();s.Roads.Clear();
+            for(int p=0;p<4;p++)Resources(e,p,0,0,0,0,0);
+            var candidates=s.Board!.Hexes.Where(h=>h.Number==6).SelectMany(h=>h.Vertices).Distinct().ToArray();
+            for(int p=0;p<4;p++)
+            {
+                int v=candidates.First(v=>!s.Buildings.ContainsKey(v)&&!s.Board.Neighbors(v).Any(s.Buildings.ContainsKey));s.Buildings[v]=new(p,1);
+            }
+            s.Robber=s.Board.Hexes.First(h=>h.Resource==null).Id;
+            OK(e,new(CommandKind.Roll,Active(e)));
+            if(e.TestState.Roll!=6)continue;
+            Assert.All(e.TestState.Players,p=>Assert.True(p.Resources.Sum()>0));e.Validate();return;
+        }
+        throw new InvalidOperationException("No seed rolling six found.");
+    }
     private static GameEngine ProductionFixture()
     {
         var e = Lobby(); var edges = new[] { new Edge(0, 0, 1), new Edge(1, 1, 2), new Edge(2, 2, 3), new Edge(3, 3, 4), new Edge(4, 4, 5), new Edge(5, 5, 0) };
