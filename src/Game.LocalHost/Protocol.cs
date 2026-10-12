@@ -3,10 +3,10 @@ using Game.Engine;
 namespace Game.LocalHost;
 
 public sealed record Request(string Id, string Op, string? Viewer = null, ulong Seed = 1,
-    string[]? Players = null, Command? Command = null);
+    string[]? Players = null, Command? Command = null, bool RelaxedTimers = false);
 public sealed record Response(string Id, bool Success, string Message, long ServerMilliseconds,
     GameView? View = null, int[]? LegalRoads = null, int[]? LegalSettlements = null, int[]? TradeRatios = null, int[]? LegalCities = null,
-    IReadOnlyDictionary<string, int[]>? Costs = null);
+    IReadOnlyDictionary<string, int[]>? Costs = null, GameTiming? Timing = null);
 
 /// <summary>Offline process boundary. Networking/authentication can replace this adapter without changing the engine.</summary>
 public sealed class Session(IClock? clock = null)
@@ -27,7 +27,7 @@ public sealed class Session(IClock? clock = null)
                     if (names == null || names.Length is < 2 or > 4 || names.Any(n => string.IsNullOrWhiteSpace(n) || n.Length > 64) || names.Distinct().Count() != names.Length)
                         return Error(request, "Choose 2–4 distinct player names (1–64 characters).");
                     if (!names.Contains(request.Viewer)) return Error(request, "Viewer must participate in this game.");
-                    var next = new GameEngine(request.Seed, clock);
+                    var next = new GameEngine(request.Seed, clock, request.RelaxedTimers?GameTiming.RelaxedTesting:GameTiming.Standard);
                     foreach (string name in names)
                     {
                         var result = next.Execute(new(CommandKind.AddPlayer, name));
@@ -65,7 +65,7 @@ public sealed class Session(IClock? clock = null)
                     {
                         ["Road"] = Game.Engine.Costs.Road, ["Settlement"] = Game.Engine.Costs.Settlement,
                         ["City"] = Game.Engine.Costs.City, ["Development"] = Game.Engine.Costs.Development
-                    });
+                    }, engine.Timing);
             }
             catch (ArgumentException e) { return Error(request, e.Message); }
         }

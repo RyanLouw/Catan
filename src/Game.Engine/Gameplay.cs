@@ -16,7 +16,7 @@ public sealed partial class GameEngine
         s.Starting = tied[0]; s.Active = tied[0];
         foreach (var (card, count) in new[] { (Card.Knight, 14), (Card.VictoryPoint, 5), (Card.RoadBuilding, 2), (Card.YearOfPlenty, 2), (Card.Monopoly, 2) })
             s.Deck.AddRange(Enumerable.Repeat(new HeldCard(card, -1), count));
-        s.Random.Shuffle(s.Deck); s.Phase = Phase.SetupSettlement; s.Deadline = now + 30_000;
+        s.Random.Shuffle(s.Deck); s.Phase = Phase.SetupSettlement; s.Deadline = now + s.Timing.MandatoryMilliseconds;
     }
     private static bool LegalSettlement(State s, int p, int vertex, bool setup)
     {
@@ -57,7 +57,9 @@ public sealed partial class GameEngine
         s.SetupStep++; s.SetupVertex = -1;
         if (s.SetupStep == s.Players.Count * 2) { s.Active = s.Starting; s.Turn = 1; BeginTurn(s, now); return; }
         int seat = s.SetupStep < s.Players.Count ? s.SetupStep : s.Players.Count * 2 - 1 - s.SetupStep;
-        s.Active = (s.Starting + seat) % s.Players.Count; s.Phase = Phase.SetupSettlement; s.Deadline = now + 30_000;
+        int previous=s.Active;
+        s.Active = (s.Starting + seat) % s.Players.Count; s.Phase = Phase.SetupSettlement; s.Deadline = now + s.Timing.MandatoryMilliseconds;
+        if(s.Active!=previous&&!s.Players[s.Active].Surrendered)BeginHandover(s,Phase.SetupSettlement,now);
         if (s.Players[s.Active].Surrendered) NextSetup(s, now);
     }
     private static void ResolveRoll(State s, long now)
@@ -66,7 +68,7 @@ public sealed partial class GameEngine
         if (s.Roll == 7)
         {
             s.Discards = s.Players.Select((p, i) => (i, Count: p.Resources.Sum())).Where(x => x.Count > 7).ToDictionary(x => x.i, x => x.Count / 2);
-            if (s.Discards.Count > 0) { s.Phase = Phase.Discard; s.Deadline = now + 30_000; }
+            if (s.Discards.Count > 0) { s.Phase = Phase.Discard; s.Deadline = now + s.Timing.MandatoryMilliseconds; }
             else BeginRobber(s, now);
         }
         else { Produce(s, s.Roll.Value); BeginAction(s, now); }
@@ -87,7 +89,7 @@ public sealed partial class GameEngine
             foreach (int p in claimants) { int n = Math.Min(claims[p, r], s.Bank[r]); s.Players[p].Resources[r] += n; s.Bank[r] -= n; }
         }
     }
-    private static void BeginRobber(State s, long now) { s.Phase = Phase.Robber; s.Deadline = now + 30_000; }
+    private static void BeginRobber(State s, long now) { s.Phase = Phase.Robber; s.Deadline = now + s.Timing.MandatoryMilliseconds; }
     private static void MoveRobber(State s, int hex, long now)
     {
         Require(hex >= 0 && hex < s.Board!.Hexes.Length && hex != s.Robber, "Move robber to a different hex."); s.Robber = hex;
@@ -95,7 +97,7 @@ public sealed partial class GameEngine
             .Distinct().Where(p => p != s.Active && s.Players[p].Resources.Sum() > 0).Order().ToList();
         if (s.Victims.Count == 0) ReturnFromRobber(s, now);
         else if (s.Victims.Count == 1) { Steal(s, s.Victims[0]); ReturnFromRobber(s, now); }
-        else { s.Phase = Phase.Victim; s.Deadline = now + 30_000; }
+        else { s.Phase = Phase.Victim; s.Deadline = now + s.Timing.MandatoryMilliseconds; }
     }
     private static void Steal(State s, int victim)
     {
@@ -110,16 +112,27 @@ public sealed partial class GameEngine
         else if (s.ActionDeadline.HasValue) { s.Phase = Phase.Action; s.Deadline = s.ActionDeadline; }
         else BeginAction(s, now);
     }
-    private static void BeginAction(State s, long now) { s.Phase = Phase.Action; s.ActionDeadline = now + 90_000; s.Deadline = s.ActionDeadline; }
-    private static void BeginRoll(State s, long now) { s.Phase = Phase.AwaitRoll; s.RollDeadline = now + 15_000; s.Deadline = s.RollDeadline; }
+    private static void BeginAction(State s, long now) { s.Phase = Phase.Action; s.ActionDeadline = now + s.Timing.ActionMilliseconds; s.Deadline = s.ActionDeadline; }
+    private static void BeginRoll(State s, long now) { s.Phase = Phase.AwaitRoll; s.RollDeadline = now + s.Timing.RollMilliseconds; s.Deadline = s.RollDeadline; }
     private static void BeginTurn(State s, long now)
     {
         s.Roll = null; s.PlayedCard = false; s.ActionDeadline = null; s.RollDeadline = null; s.Trades.Clear();
         if (s.Players.All(p => p.Surrendered)) { s.Phase = Phase.Abandoned; s.Deadline = null; return; }
         if (s.Players[s.Active].Surrendered) { NextTurn(s, now); return; }
         if (!s.Players[s.Active].Connected) { s.Phase = Phase.ReconnectGrace; s.Deadline = now + 10_000; }
-        else BeginRoll(s, now);
+        else BeginHandover(s,Phase.AwaitRoll,now);
         CheckVictory(s);
+    }
+    private static void BeginHandover(State s,Phase next,long now)
+    {
+        if(s.Timing.HandoverMilliseconds==0){s.NextPhase=next;ResumeHandover(s,now);return;}
+        s.Phase=Phase.Handover;s.NextPhase=next;s.Deadline=now+s.Timing.HandoverMilliseconds;
+    }
+    private static void ResumeHandover(State s,long now)
+    {
+        Phase next=s.NextPhase??Phase.AwaitRoll;s.NextPhase=null;
+        if(next==Phase.AwaitRoll)BeginRoll(s,now);
+        else {s.Phase=next;s.Deadline=now+s.Timing.MandatoryMilliseconds;}
     }
     private static void NextTurn(State s, long now) { s.Active = (s.Active + 1) % s.Players.Count; s.Turn++; BeginTurn(s, now); }
     private static int Ratio(State s, int p, Resource resource)

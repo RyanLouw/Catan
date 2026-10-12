@@ -2,8 +2,8 @@ namespace Game.Contracts;
 
 public enum Resource { Brick, Lumber, Wool, Grain, Ore }
 public enum Card { Knight, RoadBuilding, YearOfPlenty, Monopoly, VictoryPoint }
-public enum Phase { Lobby, SetupSettlement, SetupRoad, ReconnectGrace, AwaitRoll, Discard, Robber, Victim, Action, Paused, Finished, Abandoned }
-public enum CommandKind { AddPlayer, Ready, Start, PlaceSettlement, PlaceRoad, Roll, BuildRoad, BuildSettlement, BuildCity, BuyCard, PlayKnight, PlayRoadBuilding, PlayYearOfPlenty, PlayMonopoly, Discard, MoveRobber, ChooseVictim, BankTrade, OfferTrade, AcceptTrade, CancelTrade, EndTurn, Disconnect, Reconnect, Surrender }
+public enum Phase { Lobby, SetupSettlement, SetupRoad, ReconnectGrace, AwaitRoll, Discard, Robber, Victim, Action, Paused, Finished, Abandoned, Handover }
+public enum CommandKind { AddPlayer, Ready, Start, PlaceSettlement, PlaceRoad, Roll, BuildRoad, BuildSettlement, BuildCity, BuyCard, PlayKnight, PlayRoadBuilding, PlayYearOfPlenty, PlayMonopoly, Discard, MoveRobber, ChooseVictim, BankTrade, OfferTrade, AcceptTrade, CancelTrade, EndTurn, Disconnect, Reconnect, Surrender, ContinueTurn }
 
 /// <summary>Intent only: dice, prices, scores and trade ratios are never supplied by clients.</summary>
 public sealed record Command(CommandKind Kind, string Player, int Target = -1, int SecondTarget = -1,
@@ -23,4 +23,4 @@ public sealed record GameView(Guid GameId, string RoomCode, long Version, Phase 
     string? LargestArmy, IReadOnlyList<HexView> Hexes, IReadOnlyList<VertexView> Vertices,
     IReadOnlyList<EdgeView> Edges, IReadOnlyList<PortView> Ports, IReadOnlyList<int> Bank,
     IReadOnlyList<PlayerView> Players, IReadOnlyList<TradeView> Trades,
-    IReadOnlyDictionary<string, int> RequiredDiscards, IReadOnlyList<string> EligibleVictims, int DevelopmentDeckCount, long? ActionDeadlineMilliseconds, long? RollDeadlineMilliseconds);
+    IReadOnlyDictionary<string, int> RequiredDiscards, IReadOnlyList<string> EligibleVictims, int DevelopmentDeckCount, long? ActionDeadlineMilliseconds, long? RollDeadlineMilliseconds, Phase? NextPhase);

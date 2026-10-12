@@ -24,6 +24,8 @@ internal sealed class State
     public Board? Board;
     public List<Player> Players = [];
     public Phase Phase = Phase.Lobby;
+    public GameTiming Timing = GameTiming.Standard;
+    public Phase? NextPhase;
     public int Starting, Active, Turn, SetupStep, SetupVertex = -1, Robber, Winner = -1, Longest = -1, Army = -1;
     public int? Roll;
     public int[] Bank = [19, 19, 19, 19, 19];
@@ -41,7 +43,7 @@ internal sealed class State
     public State Clone() => new()
     {
         Id = Id, RoomCode = RoomCode, Version = Version, Random = Random.Clone(), Board = Board,
-        Players = Players.Select(p => p.Clone()).ToList(), Phase = Phase, Starting = Starting, Active = Active, Turn = Turn,
+        Players = Players.Select(p => p.Clone()).ToList(), Phase = Phase, Timing = Timing, NextPhase = NextPhase, Starting = Starting, Active = Active, Turn = Turn,
         SetupStep = SetupStep, SetupVertex = SetupVertex, Robber = Robber, Winner = Winner, Longest = Longest, Army = Army,
         Roll = Roll, Bank = (int[])Bank.Clone(), Buildings = new(Buildings), Roads = new(Roads), Deck = [.. Deck],
         Trades = Trades.Select(t => t with { Give = (int[])t.Give.Clone(), Take = (int[])t.Take.Clone() }).ToList(),

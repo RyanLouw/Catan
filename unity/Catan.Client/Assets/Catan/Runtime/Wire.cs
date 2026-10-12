@@ -16,6 +16,7 @@ namespace Catan.Client
     {
         public string Id, Op, Viewer;
         public ulong Seed = 1;
+        public bool RelaxedTimers;
         public string[] Players;
         public Intent Command;
     }
@@ -27,10 +28,11 @@ namespace Catan.Client
         public Snapshot View;
         public int[] LegalRoads, LegalSettlements, TradeRatios, LegalCities;
         public Dictionary<string, int[]> Costs;
+        public TimingProfile Timing;
     }
     [Serializable] public sealed class Snapshot
     {
-        public string GameId, RoomCode, Phase, Host, ActivePlayer, Winner, LongestRoad, LargestArmy;
+        public string GameId, RoomCode, Phase, Host, ActivePlayer, Winner, LongestRoad, LargestArmy, NextPhase;
         public long Version;
         public int Turn, RobberHex, DevelopmentDeckCount;
         public int? LastRoll;
@@ -44,6 +46,10 @@ namespace Catan.Client
         public int[] Bank;
         public Dictionary<string, int> RequiredDiscards;
         public string[] EligibleVictims;
+    }
+    [Serializable] public sealed class TimingProfile
+    {
+        public long RollMilliseconds, MandatoryMilliseconds, ActionMilliseconds, HandoverMilliseconds;
     }
     [Serializable] public sealed class Terrain { public int Id, Q, R, Number; public string Resource; public int[] Vertices; }
     [Serializable] public sealed class Intersection { public int Id, Level; public int[] Edges; public string Owner; }

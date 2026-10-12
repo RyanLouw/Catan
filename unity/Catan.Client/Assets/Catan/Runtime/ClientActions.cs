@@ -29,6 +29,7 @@ namespace Catan.Client
         {
             switch (phase)
             {
+                case "Handover": return "Take a moment to hand over — start when you are ready";
                 case "SetupSettlement": return "Drag a settlement onto a glowing intersection";
                 case "SetupRoad": return "Drag a road beside your new settlement";
                 case "AwaitRoll": return "Roll the dice to begin your turn";

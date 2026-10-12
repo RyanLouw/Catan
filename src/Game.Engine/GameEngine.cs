@@ -9,10 +9,11 @@ public sealed partial class GameEngine
     private readonly IClock clock;
     private State state;
     private readonly Dictionary<(string Player, string Id), (string Payload, Result Result)> receipts = [];
-    public GameEngine(ulong seed, IClock? clock = null)
+    public GameEngine(ulong seed, IClock? clock = null, GameTiming? timing = null)
     {
         this.clock = clock ?? new SystemClock();
-        state = new State { Random = new RandomSource(seed) };
+        var profile=timing??GameTiming.Standard; profile.Validate();
+        state = new State { Random = new RandomSource(seed), Timing = profile };
         // Unique identity independent of gameplay RNG. Online room-code allocation must check collisions.
         state.RoomCode = state.Id.ToString("N")[..8].ToUpperInvariant();
     }
@@ -68,6 +69,8 @@ public sealed partial class GameEngine
         if (c.Kind == CommandKind.Surrender) { Surrender(s, p, now); return; }
         switch (c.Kind)
         {
+            case CommandKind.ContinueTurn:
+                Current(s,p,Phase.Handover); ResumeHandover(s,now); break;
             case CommandKind.Ready:
                 Require(s.Phase == Phase.Lobby, "Ready state is lobby-only."); player.Ready = c.Target != 0; break;
             case CommandKind.Start:
@@ -76,7 +79,7 @@ public sealed partial class GameEngine
                 Start(s, now); break;
             case CommandKind.PlaceSettlement:
                 Current(s, p, Phase.SetupSettlement); PlaceSettlement(s, p, c.Target, true); s.SetupVertex = c.Target;
-                s.Phase = Phase.SetupRoad; s.Deadline = now + 30_000; break;
+                s.Phase = Phase.SetupRoad; s.Deadline = now + s.Timing.MandatoryMilliseconds; break;
             case CommandKind.PlaceRoad:
                 Current(s, p, Phase.SetupRoad); PlaceRoad(s, p, c.Target, true); NextSetup(s, now); break;
             case CommandKind.Roll:
@@ -94,7 +97,7 @@ public sealed partial class GameEngine
                 player.Cards.Add(new(s.Deck[^1].Kind, s.Turn)); s.Deck.RemoveAt(s.Deck.Count - 1); break;
             case CommandKind.PlayKnight:
                 Current(s, p, Phase.AwaitRoll, Phase.Action); Play(s, p, Card.Knight); player.Knights++;
-                s.RobberReturn = s.Phase; s.Phase = Phase.Robber; s.Deadline = now + 30_000; break;
+                s.RobberReturn = s.Phase; s.Phase = Phase.Robber; s.Deadline = now + s.Timing.MandatoryMilliseconds; break;
             case CommandKind.PlayRoadBuilding:
                 Current(s, p, Phase.AwaitRoll, Phase.Action); Play(s, p, Card.RoadBuilding);
                 int remaining = 15 - s.Roads.Values.Count(x => x == p);

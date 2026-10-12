@@ -18,7 +18,7 @@ namespace Catan.Client
         private int playerCount=2,epoch,firstRoad=-1;
         private int[] secondRoads;
         private string seed="42";
-        private bool busy,polling,destroyed,freeRoads;
+        private bool busy,polling,destroyed,freeRoads,relaxedTimers=true;
         private float receivedAt,nextPoll;
         private long renderedVersion=-1,stagedVersion=-1;
         private string renderedActor,lastGame;
@@ -91,7 +91,7 @@ namespace Catan.Client
             try
             {
                 var players=names.Take(playerCount).Select(n=>n.Trim()).ToArray();
-                var created=await Send(new HostRequest{Op="create",Viewer=players[0],Players=players,Seed=ulong.Parse(seed)},token);
+                var created=await Send(new HostRequest{Op="create",Viewer=players[0],Players=players,Seed=ulong.Parse(seed),RelaxedTimers=relaxedTimers},token);
                 if(created==null||!created.Success)return;
                 foreach(string p in players){var ready=await Send(new HostRequest{Op="command",Viewer=p,Command=Intent("Ready",p,1)},token,false);if(ready==null||!ready.Success)return;}
                 var start=await Send(new HostRequest{Op="command",Viewer=players[0],Command=Intent("Start",players[0])},token);
@@ -165,6 +165,12 @@ namespace Catan.Client
                     skin.Box(new Rect(620,315,600,155),skin.Panel);skin.Text(new Rect(645,330,550,55),"Pass the table to "+response.View.ActivePlayer,28,skin.Ink,TextAnchor.MiddleCenter);
                     if(skin.Button(new Rect(730,395,380,52),"Continue as "+response.View.ActivePlayer,!busy,true))SelectActor(response.View.ActivePlayer);
                 }
+                if(response.View.Phase=="Handover"&&MyTurn&&modal=="")
+                {
+                    skin.Box(new Rect(620,315,600,160),skin.Panel);
+                    skin.Text(new Rect(645,330,550,50),"Your turn is coming — take your time",25,skin.Ink,TextAnchor.MiddleCenter);
+                    if(skin.Button(new Rect(730,400,380,52),"I’m ready — start now",!busy,true))Execute(Intent("ContinueTurn",actor));
+                }
                 if(response.View.Phase=="Victim"&&MyTurn&&modal=="")Victims();
                 if(response.View.Winner!=null){skin.Box(new Rect(640,310,580,160),skin.Panel);skin.Text(new Rect(660,330,540,100),response.View.Winner+" wins!",40,skin.Gold,TextAnchor.MiddleCenter);}
             }
@@ -181,11 +187,12 @@ namespace Catan.Client
             skin.Text(new Rect(300,18,790,35),"TURN "+v.Turn+"   /   "+(v.ActivePlayer??"Lobby"),25,BoardRenderer.PlayerColor(v,v.ActivePlayer));
             skin.Text(new Rect(300,55,790,32),"Dice total: "+(v.LastRoll.HasValue?v.LastRoll.Value.ToString():"—")+"   •   "+PhaseLabel(v.Phase),18,skin.Muted);
             double rem=ClientActions.Remaining(response,Time.unscaledTime-receivedAt);
-            skin.Timer(new Rect(1130,8,86,86),rem,v.Phase=="Action"?90:v.Phase=="AwaitRoll"?15:v.Phase=="ReconnectGrace"?10:30);
+            double duration=v.Phase=="Action"?(response.Timing?.ActionMilliseconds??90_000)/1000.0:v.Phase=="AwaitRoll"?(response.Timing?.RollMilliseconds??15_000)/1000.0:v.Phase=="Handover"?(response.Timing?.HandoverMilliseconds??30_000)/1000.0:v.Phase=="ReconnectGrace"?10:(response.Timing?.MandatoryMilliseconds??30_000)/1000.0;
+            skin.Timer(new Rect(1130,8,86,86),rem,duration);
             skin.Text(new Rect(1227,19,140,58),"TIME LEFT",16,skin.Muted);
             if(skin.Button(new Rect(1390,24,180,52),"New game",!busy)){modal="New";}
         }
-        private static string PhaseLabel(string phase){switch(phase){case "SetupSettlement":case "SetupRoad":return "Initial placement";case "AwaitRoll":return "Roll phase";case "Action":return "Build & trade";case "Discard":return "Discard resources";case "Robber":case "Victim":return "Robber";default:return phase;}}
+        private static string PhaseLabel(string phase){switch(phase){case "Handover":return "Handover break";case "SetupSettlement":case "SetupRoad":return "Initial placement";case "AwaitRoll":return "Roll phase";case "Action":return "Build & trade";case "Discard":return "Discard resources";case "Robber":case "Victim":return "Robber";default:return phase;}}
         private void Players()
         {
             if(response==null)return;var v=response.View;skin.Text(new Rect(22,120,215,40),"AT THE TABLE",17,skin.Muted);
@@ -264,6 +271,7 @@ namespace Catan.Client
             Color[] seats={new Color(.93f,.38f,.28f),new Color(.26f,.65f,.96f),new Color(.95f,.78f,.28f),new Color(.83f,.79f,.93f)};
             for(int i=0;i<playerCount;i++){skin.Icon(new Rect(535,355+i*58,38,38),"Settlement",seats[i]);skin.Text(new Rect(580,352+i*58,95,42),"Player "+(i+1),18,seats[i]);names[i]=skin.Field(new Rect(690,352+i*58,365,42),names[i]);}
             skin.Text(new Rect(535,605,130,40),"Board seed",18,skin.Muted);seed=skin.Field(new Rect(675,605,180,40),seed);
+            relaxedTimers=GUI.Toggle(new Rect(875,615,205,35),relaxedTimers,"Relaxed testing pace");
             if(skin.Button(new Rect(535,674,355,54),busy?"Starting…":"Start game",!busy&&transport!=null,true))NewGame();
             if(response!=null&&skin.Button(new Rect(905,674,150,54),"Cancel",!busy))modal="";
             skin.Text(new Rect(510,760,580,95),status,17,skin.Ink,TextAnchor.MiddleCenter);

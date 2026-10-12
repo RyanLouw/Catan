@@ -65,4 +65,4 @@ dotnet test Game.sln -c Release --no-build
 dotnet run --project src/Game.Console -c Release --no-build -- simulate 10 1
 ```
 
-Expect 83 passing tests and 10/10 completed games with winners. For the full validation run, use `bash scripts/check.sh` in the cloud environment.
+Expect 88 passing tests and 10/10 completed games with winners. For the full validation run, use `bash scripts/check.sh` in the cloud environment.

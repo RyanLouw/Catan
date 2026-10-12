@@ -3,6 +3,7 @@ namespace Game.Engine;
 
 public sealed partial class GameEngine
 {
+    public GameTiming Timing { get { lock(gate)return state.Timing; } }
     /// <summary>Only the requesting player's private state is projected. The transport must authenticate this ID.</summary>
     public GameView View(string viewer)
     {
@@ -21,7 +22,7 @@ public sealed partial class GameEngine
                     Points(s, i, false), p.Knights, RoadLength(s, i), i == owner ? (int[])p.Resources.Clone() : null,
                     i == owner ? p.Cards.Select(c => c.Kind).ToArray() : null, i == owner ? Points(s, i, true) : null)).ToArray(),
                 s.Trades.Select(t => new TradeView(t.Id, s.Players[t.From].Id, s.Players[t.To].Id, (int[])t.Give.Clone(), (int[])t.Take.Clone())).ToArray(),
-                s.Discards.ToDictionary(kv => s.Players[kv.Key].Id, kv => kv.Value), s.Victims.Select(v => s.Players[v].Id).ToArray(), s.Deck.Count, s.ActionDeadline, s.RollDeadline);
+                s.Discards.ToDictionary(kv => s.Players[kv.Key].Id, kv => kv.Value), s.Victims.Select(v => s.Players[v].Id).ToArray(), s.Deck.Count, s.ActionDeadline, s.RollDeadline, s.NextPhase);
             string? Name(int p) => p < 0 ? null : s.Players[p].Id;
         }
     }

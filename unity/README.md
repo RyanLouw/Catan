@@ -21,7 +21,7 @@ Desktop hot-seat prototype. Unity renders a generated 3D board and an immediate-
 9. Drag the **Settlement** icon from the bottom tray onto a glowing intersection. Then drag the **Road** icon onto a glowing edge beside that settlement. Repeat through the snake setup. No IDs need to be typed.
 10. Use **Roll dice** when the roll phase begins. Drag new pieces during the action phase, use **Trade** for a resource dialog, then **End turn**. Cities are dragged onto your eligible existing houses. Dropping at an invalid location returns the piece to the tray and never spends resources.
 
-The round countdown uses the authoritative backend deadline. The timer keeps running in trade/card dialogs and while you wait. Setup decisions receive 30 seconds, rolling 15, and normal actions 90. Backend timeouts can advance the phase while you drag; the backend validates the final command again.
+The round countdown uses the authoritative backend deadline. **Relaxed testing pace** is enabled by default when creating a Unity game: **30 seconds between players, 60 seconds to roll or make a mandatory choice (including placement), and 180 seconds for actions**. Click **I’m ready — start now** to end the handover early. Rolling/placement time starts only after the handover ends. Uncheck the setting for the original 15-second roll, 30-second choices, and 90-second actions with no handover. The console still uses the original timings. Trade dialogs do not pause or extend the active action timer. Backend timeouts can advance the phase while you drag; the backend validates the final command again.
 
 ### Board and controls
 
@@ -66,6 +66,6 @@ For future online multiplayer, implement an authenticated network transport and 
 
 ## Validation status
 
-The .NET build, 83 automated tests, shared Unity wire DTOs/process transport against the actual host, and published Linux x64 executable are exercised in the cloud environment. The self-contained publication test runs without dotnet on PATH. `scripts/check.sh` also runs the existing 1,000 complete seeded games.
+The .NET build, 88 automated tests, shared Unity wire DTOs/process transport against the actual host, and published Linux x64 executable are exercised in the cloud environment. The self-contained publication test runs without dotnet on PATH. `scripts/check.sh` also runs the existing 1,000 complete seeded games.
 
 Unity Editor is not installed in the cloud machine. Editor import, shader/scene rendering, mouse picking, Play mode, and standalone Unity builds have not been executed here; verify these with steps 4–10 on your machine. Other operating systems' self-contained publications are documented but untested. The original all-inactive rule proposal remains pending in `docs/DECISIONS.md`.

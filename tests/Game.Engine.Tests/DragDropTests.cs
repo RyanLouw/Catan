@@ -21,7 +21,7 @@ public sealed class DragDropTests
         var intent=ClientActions.Drop(UI(phase),"Ryan",piece,target);Assert.NotNull(intent);Assert.Equal(kind,intent.Kind);Assert.Equal(target,intent.Target);Assert.Equal("Ryan",intent.Player);Assert.NotNull(intent.RequestId);
     }
     [Theory]
-    [InlineData("AwaitRoll","Road",7)] [InlineData("Action","Road",80)] [InlineData("Action","City",8)] [InlineData("Robber","Robber",0)] [InlineData("SetupRoad","Settlement",8)]
+    [InlineData("Handover","Road",7)] [InlineData("AwaitRoll","Road",7)] [InlineData("Action","Road",80)] [InlineData("Action","City",8)] [InlineData("Robber","Robber",0)] [InlineData("SetupRoad","Settlement",8)]
     public void WrongPhasesInvalidTargetsAndWrongActorsNeverCreateCommands(string phase,string piece,int target)
     {
         Assert.Null(ClientActions.Drop(UI(phase),"Ryan",piece,target));Assert.Null(ClientActions.Drop(UI(),"John",piece,target));
