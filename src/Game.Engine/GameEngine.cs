@@ -7,11 +7,13 @@ public sealed partial class GameEngine
 {
     private readonly object gate = new();
     private readonly IClock clock;
+    private readonly bool testing;
     private State state;
     private readonly Dictionary<(string Player, string Id), (string Payload, Result Result)> receipts = [];
-    public GameEngine(ulong seed, IClock? clock = null, GameTiming? timing = null)
+    public GameEngine(ulong seed, IClock? clock = null, GameTiming? timing = null, bool testing = false)
     {
         this.clock = clock ?? new SystemClock();
+        this.testing = testing;
         var profile=timing??GameTiming.Standard; profile.Validate();
         state = new State { Random = new RandomSource(seed), Timing = profile };
         // Unique identity independent of gameplay RNG. Online room-code allocation must check collisions.
@@ -47,7 +49,7 @@ public sealed partial class GameEngine
     {
         Require(p == s.Active, "It is not your turn."); Require(phases.Contains(s.Phase), "Action is not legal in this phase.");
     }
-    private static void Apply(State s, Command c, long now)
+    private void Apply(State s, Command c, long now)
     {
         Require(!string.IsNullOrWhiteSpace(c.Player) && c.Player.Length <= 64, "Player ID must contain 1–64 characters.");
         Require(s.Phase is not (Phase.Finished or Phase.Abandoned), "Game is complete.");
@@ -83,7 +85,10 @@ public sealed partial class GameEngine
             case CommandKind.PlaceRoad:
                 Current(s, p, Phase.SetupRoad); PlaceRoad(s, p, c.Target, true); NextSetup(s, now); break;
             case CommandKind.Roll:
-                Current(s, p, Phase.AwaitRoll); ResolveRoll(s, now); break;
+                Current(s, p, Phase.AwaitRoll);
+                if(c.FirstDie.HasValue || c.SecondDie.HasValue)
+                    Require(testing && c.FirstDie is >= 1 and <= 6 && c.SecondDie is >= 1 and <= 6, "Chosen dice require testing mode and two values from 1 to 6.");
+                ResolveRoll(s, now, c.FirstDie, c.SecondDie); break;
             case CommandKind.BuildRoad:
                 Current(s, p, Phase.Action); Pay(s, p, Costs.Road); PlaceRoad(s, p, c.Target, false); break;
             case CommandKind.BuildSettlement:

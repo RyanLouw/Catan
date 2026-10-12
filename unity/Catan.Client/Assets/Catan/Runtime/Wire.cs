@@ -11,12 +11,13 @@ namespace Catan.Client
         public string Kind, Player, OtherPlayer, Resource, RequestId;
         public int Target = -1, SecondTarget = -1;
         public int[] Give, Take;
+        public int? FirstDie, SecondDie;
     }
     [Serializable] public sealed class HostRequest
     {
         public string Id, Op, Viewer;
         public ulong Seed = 1;
-        public bool RelaxedTimers;
+        public bool RelaxedTimers, Testing;
         public string[] Players;
         public Intent Command;
     }
@@ -24,7 +25,8 @@ namespace Catan.Client
     {
         public string Id, Message;
         public int ProtocolVersion;
-        public bool Success;
+        public bool Success, Testing;
+        public Dictionary<string,int[]> TableResources;
         public long ServerMilliseconds;
         public Snapshot View;
         public int[] LegalRoads, LegalSettlements, TradeRatios, LegalCities;
@@ -79,6 +81,7 @@ namespace Catan.Client
         public int[] Resources;
         public string[] Cards;
     }
-    [Serializable] public sealed class Offer { public int Id; public string From, To; public int[] Give, Take; }
+    [Serializable] public sealed class Offer { public int Id; public string From, To; public int[] Give, Take;
+        public int? FirstDie, SecondDie; }
     public interface IGameTransport : IDisposable { Task<HostResponse> RequestAsync(HostRequest request); }
 }

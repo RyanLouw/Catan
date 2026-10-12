@@ -33,7 +33,7 @@ Rolling 7 opens a discard picker for each affected player. After discards, drag 
 
 Use **Development cards** to play a held card. Knight prompts robber movement; Year of Plenty and Monopoly have resource pickers. Road Building lets you stage the first free road, highlights the legal second positions through a read-only engine preview, then commits both atomically after the second drop. If no second road is possible, the engine accepts the permitted single road. Cancel before committing to retain the card. Victory-point cards remain passive. New-card and one-card-per-turn restrictions are enforced by the engine.
 
-The corner label reads **UI build 0.4**. An outdated host is rejected with a rebuild instruction instead of silently omitting new dice data. If startup fails, the error appears in the new-game panel and Unity Console. Rebuild Release before Play mode; the Editor always starts that build rather than a potentially stale published executable. The launcher automatically checks the standard Windows .NET installation when Unity Hub lacks a `dotnet` PATH entry. You can still set **Dotnet Executable** and **Repository Root** in the Inspector.
+The corner label reads **UI build 0.5**. An outdated host is rejected with a rebuild instruction instead of silently omitting new dice data. If startup fails, the error appears in the new-game panel and Unity Console. Rebuild Release before Play mode; the Editor always starts that build rather than a potentially stale published executable. The launcher automatically checks the standard Windows .NET installation when Unity Hub lacks a `dotnet` PATH entry. You can still set **Dotnet Executable** and **Repository Root** in the Inspector.
 
 ## Standalone desktop packaging
 
@@ -66,7 +66,7 @@ For future online multiplayer, implement an authenticated network transport and 
 
 ## Validation status
 
-The .NET build, 99 automated tests, shared Unity wire DTOs/process transport against the actual host, and published Linux x64 executable are exercised in the cloud environment. The self-contained publication test runs without dotnet on PATH. `scripts/check.sh` also runs the existing 1,000 complete seeded games.
+The .NET build, 103 automated tests, shared Unity wire DTOs/process transport against the actual host, and published Linux x64 executable are exercised in the cloud environment. The self-contained publication test runs without dotnet on PATH. `scripts/check.sh` also runs the existing 1,000 complete seeded games.
 
 Unity Editor is not installed in the cloud machine. Editor import, shader/scene rendering, mouse picking, Play mode, and standalone Unity builds have not been executed here; verify these with steps 4–10 on your machine. Other operating systems' self-contained publications are documented but untested. The original all-inactive rule proposal remains pending in `docs/DECISIONS.md`.
 
@@ -81,3 +81,9 @@ Every roll except seven produces for all eligible players, regardless of who rol
 During your action phase, open **Trade**, select the quantities to give and receive, choose **Anyone** or a named player, and submit the offer. Switch to another player's hand to inspect and accept it. Acceptance checks both players' current resources and completes the exchange once; outstanding offers end with the turn. The creator can cancel an open offer.
 
 For **Bank / port trade**, give a single resource type and receive a different type. The displayed ratio is 4:1 normally, 3:1 with your settlement/city on a generic port, or 2:1 for the resource matching an owned specific port. The bank must have the requested cards.
+
+### Inspecting resources and choosing dice
+
+Start a **new game** with **Testing: show all resources and allow chosen dice** checked (enabled by default). Each seat displays icons and counts in Brick, Lumber, Wool, Grain, Ore order. The selected player's private cards remain in their own hand. Disable Testing when creating a game for normal hidden resource types and random dice.
+
+After both initial settlements and roads are placed, select the active player and continue through the handover. Check **Choose test dice** below the Roll button. Click **Die 1** and **Die 2** to cycle each face from 1 to 6, then press **Roll dice**. Compare all seat counts with adjacent matching hexes; settlements gain one, cities two, and the robber blocks production. Seven still triggers discards and the robber. Uncheck the control for a random roll; timer-triggered rolls also remain random. Testing mode applies for the whole game and must be selected again for a new game.

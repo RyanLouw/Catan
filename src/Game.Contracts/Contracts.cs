@@ -8,7 +8,7 @@ public enum CommandKind { AddPlayer, Ready, Start, PlaceSettlement, PlaceRoad, R
 /// <summary>Intent only: dice, prices, scores and trade ratios are never supplied by clients.</summary>
 public sealed record Command(CommandKind Kind, string Player, int Target = -1, int SecondTarget = -1,
     Resource? Resource = null, IReadOnlyList<int>? Give = null, IReadOnlyList<int>? Take = null,
-    string? OtherPlayer = null, string? RequestId = null);
+    string? OtherPlayer = null, string? RequestId = null, int? FirstDie = null, int? SecondDie = null);
 public sealed record Result(bool Success, string Message, long Version);
 public sealed record HexView(int Id, int Q, int R, Resource? Resource, int Number, IReadOnlyList<int> Vertices);
 public sealed record VertexView(int Id, IReadOnlyList<int> Edges, string? Owner, int Level);

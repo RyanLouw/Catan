@@ -69,9 +69,9 @@ public sealed partial class GameEngine
         if(s.Active!=previous&&!s.Players[s.Active].Surrendered)BeginHandover(s,Phase.SetupSettlement,now);
         if (s.Players[s.Active].Surrendered) NextSetup(s, now);
     }
-    private static void ResolveRoll(State s, long now)
+    private static void ResolveRoll(State s, long now, int? first = null, int? second = null)
     {
-        s.FirstDie=s.Random.Next(6)+1;s.SecondDie=s.Random.Next(6)+1;
+        s.FirstDie=first??(s.Random.Next(6)+1);s.SecondDie=second??(s.Random.Next(6)+1);
         s.Roll=s.FirstDie+s.SecondDie;s.Production.Clear();s.RobberReturn=Phase.Action;
         if (s.Roll == 7)
         {

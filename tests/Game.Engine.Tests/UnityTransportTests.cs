@@ -37,7 +37,7 @@ public sealed class UnityTransportTests
         var state=await transport.RequestAsync(new HostRequest{Op="create",Viewer="Ryan",Players=["Ryan","John"],Seed=42,RelaxedTimers=true});
         foreach(string p in new[]{"Ryan","John"})state=await transport.RequestAsync(new HostRequest{Op="command",Viewer=p,Command=new Intent{Kind="Ready",Player=p,Target=1}});
         state=await transport.RequestAsync(new HostRequest{Op="command",Viewer="Ryan",Command=new Intent{Kind="Start",Player="Ryan"}});
-        Assert.Equal(4,state.ProtocolVersion);Assert.NotEmpty(state.View.StartingRolls);
+        Assert.Equal(5,state.ProtocolVersion);Assert.NotEmpty(state.View.StartingRolls);
         while(state.View.Turn==0)
         {
             string p=state.View.ActivePlayer;

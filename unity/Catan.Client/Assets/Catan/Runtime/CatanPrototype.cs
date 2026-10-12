@@ -15,10 +15,10 @@ namespace Catan.Client
         private string actor="",status="Welcome. Start a local game to play.",modal="New",dragging,partner="",chosenResource="Brick";
         private readonly string[] names={"Ryan","John","Player 3","Player 4"},resources={"Brick","Lumber","Wool","Grain","Ore"};
         private readonly int[] give=new int[5],take=new int[5];
-        private int playerCount=2,epoch,firstRoad=-1;
+        private int testFirst=1,testSecond=1,playerCount=2,epoch,firstRoad=-1;
         private int[] secondRoads;
         private string seed="42";
-        private bool busy,polling,destroyed,freeRoads,relaxedTimers=true;
+        private bool busy,polling,destroyed,freeRoads,relaxedTimers=true,testing=true,chosenDice;
         private float receivedAt,nextPoll,rollAnimationEnd,rollNoticeEnd;
         private string lastDiceKey,startingRollGame;
         private float startingRollUntil;
@@ -67,7 +67,7 @@ namespace Catan.Client
             if(transport==null)throw new InvalidOperationException("Backend unavailable. Rebuild Release and restart Play mode. Check Unity Console for details.");
             var incoming=await transport.RequestAsync(request);
             if(destroyed||token!=epoch)return null;
-            if(incoming.ProtocolVersion<4)throw new InvalidOperationException("The C# backend is outdated. Stop Play mode, pull feature/unity-ui, run dotnet build Game.sln -c Release, then restart Play mode.");
+            if(incoming.ProtocolVersion<5)throw new InvalidOperationException("The C# backend is outdated. Stop Play mode, pull feature/unity-ui, run dotnet build Game.sln -c Release, then restart Play mode.");
             if(incoming.View!=null&&!preview)
             {
                 if(response!=null&&incoming.View.GameId==response.View.GameId&&request.Viewer==actor&&incoming.View.Version<response.View.Version)return incoming;
@@ -100,7 +100,7 @@ namespace Catan.Client
             try
             {
                 var players=names.Take(playerCount).Select(n=>n.Trim()).ToArray();
-                var created=await Send(new HostRequest{Op="create",Viewer=players[0],Players=players,Seed=ulong.Parse(seed),RelaxedTimers=relaxedTimers},token);
+                var created=await Send(new HostRequest{Op="create",Viewer=players[0],Players=players,Seed=ulong.Parse(seed),RelaxedTimers=relaxedTimers,Testing=testing},token);
                 if(created==null||!created.Success)return;
                 foreach(string p in players){var ready=await Send(new HostRequest{Op="command",Viewer=p,Command=Intent("Ready",p,1)},token,false);if(ready==null||!ready.Success)return;}
                 var start=await Send(new HostRequest{Op="command",Viewer=players[0],Command=Intent("Start",players[0])},token);
@@ -223,7 +223,7 @@ namespace Catan.Client
         private void Header()
         {
             skin.Text(new Rect(26,20,230,60),"CATAN",34,skin.Gold);
-            skin.Text(new Rect(27,76,220,23),"V2 • UI build 0.4",14,skin.Muted);
+            skin.Text(new Rect(27,76,220,23),"V2 • UI build 0.5",14,skin.Muted);
             if(response==null){skin.Text(new Rect(300,22,800,60),"Local hot-seat • Unity desktop",24);return;}
             var v=response.View;
             skin.Text(new Rect(300,18,790,35),(v.Turn==0?"INITIAL SETUP":"TURN "+v.Turn)+"   /   "+(v.ActivePlayer??"Lobby"),25,BoardRenderer.PlayerColor(v,v.ActivePlayer));
@@ -242,11 +242,13 @@ namespace Catan.Client
             if(response==null)return;var v=response.View;skin.Text(new Rect(22,120,215,40),"AT THE TABLE",17,skin.Muted);
             for(int i=0;i<v.Players.Length;i++)
             {
-                var p=v.Players[i];float y=170+i*108;skin.Box(new Rect(18,y,224,98),p.Id==actor?new Color(.14f,.25f,.27f):skin.Panel);
-                skin.Box(new Rect(18,y,5,98),BoardRenderer.PlayerColor(v,p.Id));
+                var p=v.Players[i];float y=170+i*108;skin.Box(new Rect(18,y,224,106),p.Id==actor?new Color(.14f,.25f,.27f):skin.Panel);
+                skin.Box(new Rect(18,y,5,106),BoardRenderer.PlayerColor(v,p.Id));
                 if(skin.Button(new Rect(35,y+9,190,32),p.Id+ (p.Id==v.ActivePlayer?" •":""),!busy))SelectActor(p.Id);
                 skin.Text(new Rect(35,y+44,200,24),p.PublicPoints+" VP    "+p.ResourceCount+" resources",16,skin.Muted);
                 skin.Text(new Rect(35,y+67,200,24),v.Dice!=null&&v.Dice.PlayerResourceCounts[p.Id]>0?"+"+v.Dice.PlayerResourceCounts[p.Id]+" from the roll":p.Surrendered?"Surrendered":!p.Connected?"Disconnected":p.DevelopmentCardCount+" development cards",14,skin.Muted);
+                if(response.TableResources!=null&&response.TableResources.TryGetValue(p.Id,out var counts))
+                    for(int r=0;r<5;r++){float x=30+r*42;skin.Icon(new Rect(x,y+88,15,15),resources[r],ResourceColor(r));skin.Text(new Rect(x+17,y+86,25,20),counts[r].ToString(),12);}
                 if(v.RequiredDiscards.ContainsKey(p.Id))skin.Text(new Rect(35,y+44,200,24),"Must discard "+v.RequiredDiscards[p.Id],16,skin.Gold);
             }
             skin.Text(new Rect(22,620,220,60),"Longest road\n"+(v.LongestRoad??"Unclaimed"),17,skin.Muted);skin.Text(new Rect(22,697,220,60),"Largest army\n"+(v.LargestArmy??"Unclaimed"),17,skin.Muted);
@@ -262,8 +264,14 @@ namespace Catan.Client
                 float x=285+i*172;skin.Box(new Rect(x,714,156,70),skin.Panel);skin.Icon(new Rect(x+10,728,42,42),resources[i],ResourceColor(i));
                 skin.Text(new Rect(x+63,715,80,35),Me.Resources[i].ToString(),27);int gained=response.View.Dice?.ResourcesReceived[i]??0;skin.Text(new Rect(x+63,752,85,25),resources[i]+(gained>0?" +"+gained:""),15,gained>0?skin.Gold:skin.Muted);
             }
+            if(response.Testing)
+            {
+                chosenDice=GUI.Toggle(new Rect(1195,858,155,28),chosenDice,"Choose test dice");
+                if(skin.Button(new Rect(1360,852,100,34),"Die 1: "+testFirst,!busy))testFirst=testFirst%6+1;
+                if(skin.Button(new Rect(1470,852,100,34),"Die 2: "+testSecond,!busy))testSecond=testSecond%6+1;
+            }
             bool offers=response.View.Trades.Any(t=>t.From!=actor&&(t.To==actor||t.To==null));
-            if(skin.Button(new Rect(1195,710,180,70),"Roll dice",!busy&&MyTurn&&response.View.Phase=="AwaitRoll",true))Execute(Intent("Roll",actor));
+            if(skin.Button(new Rect(1195,710,180,70),"Roll dice",!busy&&MyTurn&&response.View.Phase=="AwaitRoll",true)){var roll=Intent("Roll",actor);if(response.Testing&&chosenDice){roll.FirstDie=testFirst;roll.SecondDie=testSecond;}Execute(roll);}
             skin.Icon(new Rect(1204,726,26,26),"Dice",skin.Background);
             if(skin.Button(new Rect(1390,710,180,70),offers?"Trade offer":"Trade",!busy&&response.View.Phase=="Action"&&(MyTurn||offers)))Open("Trade");
             if(skin.Button(new Rect(1390,796,180,50),"End turn",!busy&&MyTurn&&response.View.Phase=="Action"))Execute(Intent("EndTurn",actor));
@@ -317,6 +325,7 @@ namespace Catan.Client
             for(int i=0;i<playerCount;i++){skin.Icon(new Rect(535,355+i*58,38,38),"Settlement",seats[i]);skin.Text(new Rect(580,352+i*58,95,42),"Player "+(i+1),18,seats[i]);names[i]=skin.Field(new Rect(690,352+i*58,365,42),names[i]);}
             skin.Text(new Rect(535,605,130,40),"Board seed",18,skin.Muted);seed=skin.Field(new Rect(675,605,180,40),seed);
             relaxedTimers=GUI.Toggle(new Rect(875,615,205,35),relaxedTimers,"Relaxed testing pace");
+            testing=GUI.Toggle(new Rect(535,650,500,24),testing,"Testing: show all resources and allow chosen dice");
             if(skin.Button(new Rect(535,674,355,54),busy?"Starting…":"Start game",!busy&&transport!=null,true))NewGame();
             if(response!=null&&skin.Button(new Rect(905,674,150,54),"Cancel",!busy))modal="";
             skin.Text(new Rect(510,760,580,95),status,17,skin.Ink,TextAnchor.MiddleCenter);
