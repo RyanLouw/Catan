@@ -1,0 +1,18 @@
+name: Stage 1 validation
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - run: dotnet restore Game.sln --locked-mode
+      - run: dotnet build Game.sln -c Release --no-restore
+      - run: dotnet test Game.sln -c Release --no-build --no-restore
+      - run: dotnet run --project src/Game.Console -c Release --no-build -- simulate 1000 1
