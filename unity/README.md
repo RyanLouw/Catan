@@ -38,7 +38,7 @@ Unity cannot load the .NET 10 engine DLL as a Unity script assembly. The backend
 From the repository root, on a machine with .NET SDK installed:
 
 ```bash
-dotnet publish src/Game.LocalHost -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o unity/Catan.Client/Assets/StreamingAssets/Backend/win-x64
+dotnet publish src/Game.LocalHost -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:NuGetLockFilePath=packages.publish.lock.json -o unity/Catan.Client/Assets/StreamingAssets/Backend/win-x64
 ```
 
 Replace `win-x64` in both places with `linux-x64`, `osx-x64`, or `osx-arm64` for your desktop. A shell helper is also provided:
@@ -48,7 +48,7 @@ bash scripts/publish-unity-backend.sh linux-x64
 python3 scripts/test-offline-host.py
 ```
 
-Then build the saved prototype scene using Unity's desktop build profile with the **Mono** scripting backend. The application finds the matching RID executable in StreamingAssets. No .NET SDK is required on the player's machine. Published binaries are generated outputs and are excluded from Git. Do not copy .NET 10 DLLs into Unity's script/plugin folders. Linux/macOS packaging must preserve executable permissions; use `chmod +x` on the packaged `Game.LocalHost` if the platform's copy/build step drops them. macOS signing/notarization and distributable installers are outside this prototype.
+Then build the saved prototype scene using Unity's desktop build profile with the **Mono** scripting backend. The application finds the matching RID executable in StreamingAssets. No .NET SDK is required on the player's machine. Published binaries and RID-specific publication lockfiles are generated outputs and are excluded from Git. Publication uses separate lockfiles to preserve normal locked restores. Do not copy .NET 10 DLLs into Unity's script/plugin folders. Linux/macOS packaging must preserve executable permissions; use `chmod +x` on the packaged `Game.LocalHost` if the platform's copy/build step drops them. macOS signing/notarization and distributable installers are outside this prototype.
 
 The first package restore and backend publication need Internet access; gameplay is offline. WebGL, mobile, IL2CPP builds, automated in-game opponents, polished artwork, and online multiplayer are outside V1. Automated complete-game simulations remain available in the existing console project.
 

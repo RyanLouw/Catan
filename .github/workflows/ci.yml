@@ -15,6 +15,7 @@ jobs:
       - run: dotnet restore Game.sln --locked-mode
       - run: dotnet build Game.sln -c Release --no-restore
       - run: bash scripts/publish-unity-backend.sh linux-x64
+      - run: dotnet restore Game.sln --locked-mode
       - run: python3 scripts/test-offline-host.py
       - run: dotnet test Game.sln -c Release --no-build --no-restore
       - run: dotnet run --project src/Game.Console -c Release --no-build -- simulate 1000 1

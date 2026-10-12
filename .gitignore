@@ -8,3 +8,4 @@ unity/**/Logs/
 unity/**/UserSettings/
 unity/**/Builds/
 unity/**/Assets/StreamingAssets/Backend/
+**/packages.publish.lock.json
