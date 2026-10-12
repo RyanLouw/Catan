@@ -4,7 +4,7 @@ A terminal-playable, authoritative implementation of classic base-game Catan for
 
 ## Unity offline prototype
 
-The `feature/unity-ui` branch adds a Unity 6 LTS desktop hot-seat UI and a local C# engine host. See [Unity setup and play instructions](unity/README.md). V1 uses a local process; V2 can replace the transport with an authenticated online connection.
+The `feature/unity-ui` branch adds a Unity 6 LTS desktop hot-seat UI and a local C# engine host. See [Unity setup and play instructions](unity/README.md). The desktop UI uses a local process; a future online version can replace the transport with an authenticated connection.
 
 ## Run
 

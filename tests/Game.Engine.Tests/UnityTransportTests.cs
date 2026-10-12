@@ -20,10 +20,14 @@ public sealed class UnityTransportTests
         var start = await transport.RequestAsync(new HostRequest { Op = "command", Viewer = "Ryan", Command = new Intent { Kind = "Start", Player = "Ryan", RequestId = "start" } });
         Assert.True(start.Success); Assert.Equal("SetupSettlement", start.View.Phase); Assert.Equal(19, start.View.Hexes.Length); Assert.Equal(72, start.View.Edges.Length);
         Assert.NotEmpty(start.LegalSettlements); Assert.Equal(5, start.TradeRatios.Length);
+        Assert.Equal(Game.Engine.Costs.Settlement,start.Costs["Settlement"]); Assert.NotNull(start.LegalCities);
         var snapshot = await transport.RequestAsync(new HostRequest { Op = "view", Viewer = start.View.ActivePlayer });
         var placed = await transport.RequestAsync(new HostRequest { Op = "command", Viewer = start.View.ActivePlayer,
-            Command = new Intent { Kind = "PlaceSettlement", Player = start.View.ActivePlayer, Target = snapshot.LegalSettlements[0], RequestId = "settlement" } });
+            Command = ClientActions.Drop(snapshot,start.View.ActivePlayer,"Settlement",snapshot.LegalSettlements[0]) });
         Assert.True(placed.Success, placed.Message); Assert.Equal("SetupRoad", placed.View.Phase); Assert.NotEmpty(placed.LegalRoads);
+        var road=ClientActions.Drop(placed,placed.View.ActivePlayer,"Road",placed.LegalRoads[0]);
+        var built=await transport.RequestAsync(new HostRequest{Op="command",Viewer=placed.View.ActivePlayer,Command=road});
+        Assert.True(built.Success,built.Message);Assert.Contains(built.View.Edges,e=>e.Id==road.Target&&e.Owner==road.Player);
     }
     private static string Repository()
     {

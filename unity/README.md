@@ -1,11 +1,11 @@
-# Offline Unity V1
+# Unity desktop UI — V2
 
 Desktop hot-seat prototype. Unity renders a generated 3D board and an immediate-mode control interface. It never decides dice, resource changes, legal moves, scores, card effects, or timers. The existing C# engine runs in a separate local process; there is no HTTP server, database, account, or Internet connection during play.
 
 ## Open and play
 
 1. Clone the `feature/unity-ui` branch, or switch to it in your existing checkout.
-2. Install .NET SDK 10.0.100 and Unity 6.0 LTS through Unity Hub. The project uses `6000.0.23f1` as its baseline; a newer 6.0 LTS patch can upgrade it. Install the desktop build module for your platform if you want a standalone player.
+2. Install .NET SDK 10.0.100 or a later .NET 10 SDK, and Unity 6.0 LTS through Unity Hub. The project uses `6000.0.23f1` as its baseline; a newer 6.0 LTS patch can upgrade it. Install the desktop build module for your platform if you want a standalone player.
 3. In the repository root, run:
 
    ```bash
@@ -16,20 +16,24 @@ Desktop hot-seat prototype. Unity renders a generated 3D board and an immediate-
 4. In Unity Hub, **Add project from disk** and choose `unity/Catan.Client` (not the repository root).
 5. Let Unity resolve the pinned packages, then select **Catan → Create prototype scene**. Save this scene when prompted. This prepares the build scene too.
 6. Select the `Catan offline prototype` object. Its **Dotnet Executable** defaults to `dotnet`; use a full executable path if Unity Hub does not inherit your PATH. On this cloud machine that path is `/workspace/.tools/dotnet/dotnet`. Leave **Repository Root** blank for the checked-in folder layout, or set it explicitly if you move the Unity project.
-7. Press **Play**. Enter 2–4 comma-separated names and a seed, then click **New game**.
-8. Select each player and click **Ready**. Select the host (first player) and click **Start**.
-9. Click **Switch to active player**, click a cyan legal vertex, then **Place initial settlement**. Click a legal teal edge and **Place initial road**. Repeat for all snake-order placements.
-10. During turns, select the active player, **Roll dice**, and follow the displayed phase. Click a hex before **Move robber**, set an eligible victim when needed, and use build/trade/card controls during legal phases. **End turn** advances play.
+7. Press **Play**. Choose 2–4 players, enter their names, then click **Start game**. The local players are readied and the host starts through engine commands.
+8. When the active player changes, use **Continue as NAME** to pass the table to that player. Each seat has its own colour: red, blue, gold, or purple. Their roads, houses, cities, player card, and drag preview use that colour.
+9. Drag the **Settlement** icon from the bottom tray onto a glowing intersection. Then drag the **Road** icon onto a glowing edge beside that settlement. Repeat through the snake setup. No IDs need to be typed.
+10. Use **Roll dice** when the roll phase begins. Drag new pieces during the action phase, use **Trade** for a resource dialog, then **End turn**. Cities are dragged onto your eligible existing houses. Dropping at an invalid location returns the piece to the tray and never spends resources.
 
-The timer is real and the backend runs it even while you scroll or wait. Setup choices time out in 30 seconds; roll in 15; main actions in 90. Polling updates authoritative state twice per second. Invalid moves show `Rejected` and the state remains intact. Clicked IDs are shared between action controls: make sure you selected a vertex for a settlement/city, an edge for a road, or a hex for the robber.
+The round countdown uses the authoritative backend deadline. The timer keeps running in trade/card dialogs and while you wait. Setup decisions receive 30 seconds, rolling 15, and normal actions 90. Backend timeouts can advance the phase while you drag; the backend validates the final command again.
 
-### Hands and actions
+### Board and controls
 
-The selected actor's resources, development cards, and hidden VP are visible in the right-hand panel. Opponents expose only public counts. Selection is manual for hot-seat play; use **Switch to active player** to hand over the terminal. For discards or accepting another player's trade, select that participant instead of the active player.
+The board is the main play surface. Roads are coloured strips, settlements are roofed houses, and cities have a tower. The bottom tray shows piece icons, available pieces, and resource cost icons supplied by the engine. Your resource hand and score are visible below the board; each opponent's panel displays public counts only. Select a player's panel for hot-seat decisions such as a discard or accepting a trade. Mouse gestures use Unity GUI events rather than the legacy `Input` API, supporting projects with different input settings.
 
-Resource bundles use **brick,lumber,wool,grain,ore**. `Give` is used for discards, bank/harbor trades, and player offers; `Take` is used for trades and Year of Plenty. Set the trading partner, then **Offer player trade**. Select that partner, enter the displayed offer ID, then **Accept offer**. The backend rechecks balances atomically and supplies maritime ratios.
+The **Trade** dialog has resource icons and plus/minus selectors instead of comma-separated bundles. Choose a partner, select what to give/receive, then offer the exchange. Select the recipient's panel, open the trade offer, and accept it. Bank/harbor ratios are supplied by the backend. Trade offers are cancelled by the engine when a turn expires.
 
-Road Building uses `Target ID` and `Second road ID`; use -1 for the second only if the engine permits a single road. Monopoly uses the chosen resource. Card play restrictions remain in the engine. Development cards can also be played before rolling when legal.
+Rolling 7 opens a discard picker for each affected player. After discards, drag the **Robber** icon onto a different hex, then choose a victim from the prompted player buttons if necessary.
+
+Use **Development cards** to play a held card. Knight prompts robber movement; Year of Plenty and Monopoly have resource pickers. Road Building lets you stage the first free road, highlights the legal second positions through a read-only engine preview, then commits both atomically after the second drop. If no second road is possible, the engine accepts the permitted single road. Cancel before committing to retain the card. Victory-point cards remain passive. New-card and one-card-per-turn restrictions are enforced by the engine.
+
+If startup fails, the error appears in the new-game panel and Unity Console. Rebuild Release before Play mode; the Editor always starts that build rather than a potentially stale published executable. The launcher automatically checks the standard Windows .NET installation when Unity Hub lacks a `dotnet` PATH entry. You can still set **Dotnet Executable** and **Repository Root** in the Inspector.
 
 ## Standalone desktop packaging
 
@@ -52,16 +56,16 @@ Then build the saved prototype scene using Unity's desktop build profile with th
 
 GitHub Actions is manual validation only; there is no automatic deployment. Test in Unity Play mode before creating a standalone package.
 
-The first package restore and backend publication need Internet access; gameplay is offline. WebGL, mobile, IL2CPP builds, automated in-game opponents, polished artwork, and online multiplayer are outside V1. Automated complete-game simulations remain available in the existing console project.
+The first package restore and backend publication need Internet access; gameplay is offline. WebGL, mobile, IL2CPP builds, automated in-game opponents, polished artwork, and online multiplayer are outside this desktop prototype. Automated complete-game simulations remain available in the existing console project.
 
-## V2 boundary
+## Future online boundary
 
 `IGameTransport` is the UI seam. `LocalProcessTransport` launches the desktop backend and exchanges newline-delimited JSON with correlation IDs. UI intent commands have stable request IDs for engine idempotency. The backend sends per-player projections plus legal placement candidates and authoritative clock/deadline values.
 
-For V2, implement an authenticated network transport and server host around `Game.Engine`. Bind the actor/viewer to authenticated identity rather than trusting a supplied name; secure private snapshots; validate protocol versions; manage lobbies, room-code uniqueness, reconnection, durable state, and reconnecting command receipts. The current local adapter trusts the desktop hot-seat user and is deliberately **not** an online security boundary. No gameplay rules need to move into Unity.
+For future online multiplayer, implement an authenticated network transport and server host around `Game.Engine`. Bind the actor/viewer to authenticated identity rather than trusting a supplied name; secure private snapshots; validate protocol versions; manage lobbies, room-code uniqueness, reconnection, durable state, and reconnecting command receipts. The current local adapter trusts the desktop hot-seat user and is deliberately **not** an online security boundary. No gameplay rules need to move into Unity.
 
 ## Validation status
 
-The .NET build, 68 automated tests, shared Unity wire DTOs/process transport against the actual host, and published Linux x64 executable are exercised in the cloud environment. The self-contained publication test runs without dotnet on PATH. `scripts/check.sh` also runs the existing 1,000 complete seeded games.
+The .NET build, 83 automated tests, shared Unity wire DTOs/process transport against the actual host, and published Linux x64 executable are exercised in the cloud environment. The self-contained publication test runs without dotnet on PATH. `scripts/check.sh` also runs the existing 1,000 complete seeded games.
 
 Unity Editor is not installed in the cloud machine. Editor import, shader/scene rendering, mouse picking, Play mode, and standalone Unity builds have not been executed here; verify these with steps 4–10 on your machine. Other operating systems' self-contained publications are documented but untested. The original all-inactive rule proposal remains pending in `docs/DECISIONS.md`.

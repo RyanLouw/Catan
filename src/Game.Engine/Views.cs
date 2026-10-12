@@ -41,6 +41,30 @@ public sealed partial class GameEngine
             return Enumerable.Range(0, state.Board.VertexEdges.Length).Where(v => LegalSettlement(state, p, v, setup)).ToArray();
         }
     }
+    public IReadOnlyList<int> LegalCities(string player)
+    {
+        lock (gate)
+        {
+            int p = Find(state, player);
+            if (p < 0 || state.Buildings.Values.Count(b => b.Owner == p && b.Level == 2) >= 4) return [];
+            return state.Buildings.Where(kv => kv.Value.Owner == p && kv.Value.Level == 1).Select(kv => kv.Key).ToArray();
+        }
+    }
+    /// <summary>Preview the second free road on a transaction clone; the live game and PRNG are untouched.</summary>
+    public (bool Valid, int[] SecondRoads) PreviewRoadBuilding(string player, int first)
+    {
+        lock (gate)
+        {
+            var preview = state.Clone(); int p = Find(preview, player);
+            try
+            {
+                Require(p >= 0, "Unknown player."); Current(preview, p, Phase.AwaitRoll, Phase.Action);
+                Play(preview, p, Card.RoadBuilding); PlaceRoad(preview, p, first, false);
+                return (true, Enumerable.Range(0, preview.Board!.Edges.Length).Where(e => LegalRoad(preview, p, e, false)).ToArray());
+            }
+            catch (RuleViolation) { return (false, []); }
+        }
+    }
     public int TradeRatio(string player, Resource resource)
     {
         lock (gate)

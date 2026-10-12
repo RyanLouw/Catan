@@ -3,183 +3,335 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
-
 namespace Catan.Client
 {
     public sealed class CatanPrototype : MonoBehaviour
     {
-        public string DotnetExecutable = "dotnet";
-        public string RepositoryRoot = "";
+        public string DotnetExecutable="dotnet",RepositoryRoot="";
         private IGameTransport transport;
         private BoardRenderer board;
+        private TabletopSkin skin;
         private HostResponse response;
-        private string actor = "", names = "Ryan,John", seed = "42", status = "Create a game to begin.", target = "0", secondTarget = "-1", partner = "", offerId = "1";
-        private string give = "0,0,0,0,0", take = "0,0,0,0,0", resource = "Brick";
-        private readonly string[] resources = { "Brick", "Lumber", "Wool", "Grain", "Ore" };
-        private bool busy, destroyed;
-        private float nextPoll, receivedAt;
-        private long drawnVersion = -1;
-        private string drawnActor;
-        private Vector2 leftScroll, rightScroll;
+        private string actor="",status="Welcome. Start a local game to play.",modal="New",dragging,partner="",chosenResource="Brick";
+        private readonly string[] names={"Ryan","John","Player 3","Player 4"},resources={"Brick","Lumber","Wool","Grain","Ore"};
+        private readonly int[] give=new int[5],take=new int[5];
+        private int playerCount=2,epoch,firstRoad=-1;
+        private int[] secondRoads;
+        private string seed="42";
+        private bool busy,polling,destroyed,freeRoads;
+        private float receivedAt,nextPoll;
+        private long renderedVersion=-1,stagedVersion=-1;
+        private string renderedActor,lastGame;
+        private float scale;
+        private Vector2 offset,mouse;
+        private readonly Rect viewport=new Rect(265,112,1320,550);
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Bootstrap()
-        {
-            if (FindFirstObjectByType<CatanPrototype>() == null) new GameObject("Catan offline prototype").AddComponent<CatanPrototype>();
-        }
+        private static void Bootstrap(){if(FindFirstObjectByType<CatanPrototype>()==null)new GameObject("Catan table").AddComponent<CatanPrototype>();}
         private void Start()
         {
-            board = gameObject.AddComponent<BoardRenderer>();
+            skin=new TabletopSkin();board=GetComponent<BoardRenderer>()??gameObject.AddComponent<BoardRenderer>();
             try
             {
-                string rid = Application.platform == RuntimePlatform.WindowsEditor || Application.platform == RuntimePlatform.WindowsPlayer ? "win-x64"
-                    : Application.platform == RuntimePlatform.OSXEditor || Application.platform == RuntimePlatform.OSXPlayer ? (SystemInfo.processorType.Contains("Apple") ? "osx-arm64" : "osx-x64") : "linux-x64";
-                string executableName = rid.StartsWith("win") ? "Game.LocalHost.exe" : "Game.LocalHost";
-                string packaged = Path.Combine(Application.streamingAssetsPath, "Backend", rid, executableName);
-                if (File.Exists(packaged)) transport = new LocalProcessTransport(packaged, "", Path.GetDirectoryName(packaged));
+                string rid=Application.platform==RuntimePlatform.WindowsEditor||Application.platform==RuntimePlatform.WindowsPlayer?"win-x64":Application.platform==RuntimePlatform.OSXEditor||Application.platform==RuntimePlatform.OSXPlayer?(SystemInfo.processorType.Contains("Apple")?"osx-arm64":"osx-x64"):"linux-x64";
+                string packaged=Path.Combine(Application.streamingAssetsPath,"Backend",rid,rid.StartsWith("win")?"Game.LocalHost.exe":"Game.LocalHost");
+                // Editor always uses the current Release build, avoiding an outdated packaged backend.
+                if(!Application.isEditor)
+                {
+                    if(!File.Exists(packaged))throw new FileNotFoundException("Build the desktop backend package first; see unity/README.md.");
+                    transport=new LocalProcessTransport(packaged,"",Path.GetDirectoryName(packaged));
+                }
                 else
                 {
-                    if (!Application.isEditor) throw new FileNotFoundException("Publish the offline backend into StreamingAssets before building the desktop player.", packaged);
-                    string root = string.IsNullOrWhiteSpace(RepositoryRoot) ? Path.GetFullPath(Path.Combine(Application.dataPath, "../../..")) : RepositoryRoot;
-                    string dll = Path.Combine(root, "src", "Game.LocalHost", "bin", "Release", "net10.0", "Game.LocalHost.dll");
-                    if (!File.Exists(dll)) throw new FileNotFoundException("Build Game.sln in Release first; see unity/README.md.", dll);
-                    transport = new LocalProcessTransport(DotnetExecutable, "\"" + dll + "\"", root);
+                    string root=string.IsNullOrWhiteSpace(RepositoryRoot)?Path.GetFullPath(Path.Combine(Application.dataPath,"../../..")):RepositoryRoot;
+                    string dll=Path.Combine(root,"src/Game.LocalHost/bin/Release/net10.0/Game.LocalHost.dll");
+                    if(!File.Exists(dll))throw new FileNotFoundException("Run dotnet build Game.sln -c Release, then restart Play mode.");
+                    string exe=DotnetExecutable;
+                    if(exe=="dotnet")
+                    {
+                        string windows=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"dotnet","dotnet.exe");
+                        foreach(string path in new[]{windows,"/usr/local/share/dotnet/dotnet","/usr/share/dotnet/dotnet","/workspace/.tools/dotnet/dotnet"})if(File.Exists(path)){exe=path;break;}
+                    }
+                    transport=new LocalProcessTransport(exe,"\""+dll+"\"",root);
                 }
             }
-            catch (Exception e) { status = "Backend startup failed: " + e.Message; Debug.LogError(status); }
+            catch(Exception e){status="Backend could not start: "+e.Message;Debug.LogError(status);}
         }
         private void Update()
         {
-            if (!busy && response != null && Time.unscaledTime >= nextPoll) { nextPoll = Time.unscaledTime + .5f; _ = Refresh(); }
-            if (board != null && board.BoardCamera != null && Input.GetMouseButtonDown(0) && board.BoardCamera.pixelRect.Contains(Input.mousePosition))
-            {
-                if (Physics.Raycast(board.BoardCamera.ScreenPointToRay(Input.mousePosition), out var hit))
-                {
-                    var selected = hit.collider.GetComponent<BoardTarget>();
-                    if (selected != null) { target = selected.Id.ToString(); status = "Selected " + selected.Kind + " " + target + ". Choose the matching action."; }
-                }
-            }
+            if(!busy&&!polling&&response!=null&&Time.unscaledTime>=nextPoll){nextPoll=Time.unscaledTime+.5f;_ = Refresh();}
         }
-        private async Task<bool> Send(HostRequest request, bool showStatus = true)
+        private async Task<HostResponse> Send(HostRequest request,int token,bool announce=true,bool preview=false)
         {
-            if (transport == null) { status = "Backend unavailable. See startup error and unity/README.md."; return false; }
-            var incoming = await transport.RequestAsync(request);
-            if (destroyed) return false;
-            if (incoming.View != null)
+            if(transport==null)throw new InvalidOperationException("Backend unavailable. Rebuild Release and restart Play mode. Check Unity Console for details.");
+            var incoming=await transport.RequestAsync(request);
+            if(destroyed||token!=epoch)return null;
+            if(incoming.View!=null&&!preview)
             {
-                actor = request.Viewer; response = incoming; receivedAt = Time.unscaledTime;
-                if (incoming.View.Version != drawnVersion || actor != drawnActor || incoming.View.GameId != lastGame)
-                { board.Render(incoming); drawnVersion = incoming.View.Version; drawnActor = actor; lastGame = incoming.View.GameId; }
+                if(response!=null&&incoming.View.GameId==response.View.GameId&&request.Viewer==actor&&incoming.View.Version<response.View.Version)return incoming;
+                actor=request.Viewer;response=incoming;receivedAt=Time.unscaledTime;
+                if((firstRoad>=0&&(incoming.View.Version!=stagedVersion||actor!=renderedActor))||(freeRoads&&(incoming.View.ActivePlayer!=actor||(incoming.View.Phase!="Action"&&incoming.View.Phase!="AwaitRoll")))){CancelFreeRoads();}
+                if(incoming.View.Version!=renderedVersion||actor!=renderedActor||incoming.View.GameId!=lastGame)
+                {board.Render(incoming);renderedVersion=incoming.View.Version;renderedActor=actor;lastGame=incoming.View.GameId;}
+                if(modal=="Discard"&&(incoming.View.Phase!="Discard"||!incoming.View.RequiredDiscards.ContainsKey(actor)))modal="";
+                if(incoming.View.Phase=="Discard"&&incoming.View.RequiredDiscards.ContainsKey(actor)&&modal!="Discard"){ResetBundles();modal="Discard";}
             }
-            if (showStatus || !incoming.Success) status = incoming.Success ? "Accepted: " + incoming.Message : "Rejected: " + incoming.Message;
-            return incoming.Success;
+            if(announce||!incoming.Success)status=incoming.Success?"Done. "+(incoming.View==null?"":ClientActions.Instruction(incoming.View.Phase)):incoming.Message;
+            return incoming;
         }
-        private string lastGame;
         private async Task Refresh()
         {
-            busy = true;
-            try { await Send(new HostRequest { Op = "view", Viewer = actor }, false); }
-            catch (Exception e) { status = e.Message; nextPoll = Time.unscaledTime + 5; }
-            finally { busy = false; }
+            polling=true;int token=epoch;
+            try{await Send(new HostRequest{Op="view",Viewer=actor},token,false);}
+            catch(Exception e){if(!destroyed){status=e.Message;nextPoll=Time.unscaledTime+5;}}
+            finally{polling=false;}
         }
         private async void NewGame()
         {
-            if (busy) return; busy = true;
+            if(busy)return;busy=true;int token=++epoch;CancelFreeRoads();
             try
             {
-                var players = names.Split(',').Select(n => n.Trim()).ToArray();
-                bool success = await Send(new HostRequest { Op = "create", Viewer = players[0], Seed = ulong.Parse(seed), Players = players });
-                if (success) partner = response.View.Players.First(p => p.Id != actor).Id;
+                var players=names.Take(playerCount).Select(n=>n.Trim()).ToArray();
+                var created=await Send(new HostRequest{Op="create",Viewer=players[0],Players=players,Seed=ulong.Parse(seed)},token);
+                if(created==null||!created.Success)return;
+                foreach(string p in players){var ready=await Send(new HostRequest{Op="command",Viewer=p,Command=Intent("Ready",p,1)},token,false);if(ready==null||!ready.Success)return;}
+                var start=await Send(new HostRequest{Op="command",Viewer=players[0],Command=Intent("Start",players[0])},token);
+                if(start!=null&&start.Success){modal="";partner=players[1];}
             }
-            catch (Exception e) { status = e.Message; }
-            finally { busy = false; }
+            catch(Exception e){status=e.Message;}
+            finally{busy=false;}
         }
         private async void SelectActor(string name)
         {
-            if (busy) return; busy = true;
-            try { await Send(new HostRequest { Op = "view", Viewer = name }); }
-            catch (Exception e) { status = e.Message; }
-            finally { busy = false; }
+            if(busy)return;busy=true;int token=++epoch;dragging=null;CancelFreeRoads();
+            try{modal="";ResetBundles();await Send(new HostRequest{Op="view",Viewer=name},token,false);}
+            catch(Exception e){status=e.Message;}
+            finally{busy=false;}
         }
-        private async void Command(string kind, bool bundles = false, bool useResource = false)
+        private static Intent Intent(string kind,string player,int target=-1)=>new Intent{Kind=kind,Player=player,Target=target,RequestId=Guid.NewGuid().ToString("N")};
+        private async void Execute(Intent intent,bool close=true)
         {
-            if (busy) return; busy = true;
-            try
+            if(busy)return;busy=true;int token=++epoch;
+            try{var result=await Send(new HostRequest{Op="command",Viewer=actor,Command=intent},token);if(result!=null&&result.Success&&close)modal="";}
+            catch(Exception e){status=e.Message;}
+            finally{busy=false;}
+        }
+        private void CancelFreeRoads(){firstRoad=-1;secondRoads=null;freeRoads=false;stagedVersion=-1;board?.Focus(null);}
+        private async void Drop(string piece,int id)
+        {
+            if(busy||id<0){status="Drop onto a glowing location on the board.";return;}
+            if(piece=="Road"&&freeRoads)
             {
-                var intent = new Intent { Kind = kind, Player = actor, Target = int.Parse(target), SecondTarget = int.Parse(secondTarget), RequestId = Guid.NewGuid().ToString("N"),
-                    OtherPlayer = kind == "ChooseVictim" || kind == "OfferTrade" ? partner : null, Resource = useResource ? resource : null };
-                if (kind == "Ready") intent.Target = 1;
-                if (kind == "AcceptTrade" || kind == "CancelTrade") intent.Target = int.Parse(offerId);
-                if (bundles) { intent.Give = ParseBundle(give); intent.Take = ParseBundle(take); }
-                await Send(new HostRequest { Op = "command", Viewer = actor, Command = intent });
+                if(response.View.ActivePlayer!=actor){CancelFreeRoads();return;}
+                if(firstRoad>=0)
+                {
+                    if(!ClientActions.Contains(secondRoads,id)){status="Choose a glowing edge for your second free road.";return;}
+                    var play=Intent("PlayRoadBuilding",actor,firstRoad);play.SecondTarget=id;CancelFreeRoads();Execute(play);return;
+                }
+                busy=true;int token=++epoch;
+                try
+                {
+                    var preview=await Send(new HostRequest{Op="preview-roads",Viewer=actor,Command=Intent("PlayRoadBuilding",actor,id)},token,true,true);
+                    if(preview==null||!preview.Success)return;
+                    if(preview.LegalRoads.Length==0){freeRoads=false;busy=false;Execute(Intent("PlayRoadBuilding",actor,id));return;}
+                    firstRoad=id;secondRoads=preview.LegalRoads;stagedVersion=preview.View.Version;
+                    board.Focus("Road",secondRoads,firstRoad);status="First free road staged. Drag the road icon again to place the second; cancel to keep your card.";
+                }
+                catch(Exception e){status=e.Message;}
+                finally{busy=false;}
+                return;
             }
-            catch (Exception e) { status = "Input/connection error: " + e.Message; }
-            finally { busy = false; }
+            var command=ClientActions.Drop(response,actor,piece,id);
+            if(command==null){status="That drop is not available. Use a glowing location during your turn.";return;}
+            Execute(command);
         }
-        private static int[] ParseBundle(string value)
-        {
-            var values = value.Split(',').Select(int.Parse).ToArray(); if (values.Length != 5) throw new FormatException("Use five counts: brick,lumber,wool,grain,ore."); return values;
-        }
+        private bool MyTurn=>response!=null&&response.View.ActivePlayer==actor;
+        private Participant Me=>response?.View.Players.FirstOrDefault(p=>p.Id==actor);
+        private void ResetBundles(){Array.Clear(give,0,5);Array.Clear(take,0,5);}
+        private void Open(string dialog){ResetBundles();modal=dialog;if(response!=null&&(partner==actor||!response.View.Players.Any(p=>p.Id==partner)))partner=response.View.Players.First(p=>p.Id!=actor).Id;}
         private void OnGUI()
         {
-            var originalMatrix = GUI.matrix; GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(Screen.width / 1600f, Screen.height / 1000f, 1));
-            // IMGUI is an overlay: leave the board camera's center viewport unobscured.
-            GUI.color = new Color(.045f,.065f,.09f);
-            GUI.DrawTexture(new Rect(0,0,440,1000), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(1280,0,320,1000), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(440,0,840,140), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(440,860,840,140), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.skin.label.fontSize = 17; GUI.skin.button.fontSize = 17; GUI.skin.textField.fontSize = 17;
-            GUI.Label(new Rect(25,15,1550,45), "CATAN / OFFLINE V1 — local C# engine, Unity presentation");
-            GUI.Label(new Rect(455,80,805,55), response == null ? "Create a seeded hot-seat game" : "Turn " + response.View.Turn + "   " + response.View.Phase + "   Active: " + response.View.ActivePlayer + "   Dice: " + (response.View.LastRoll.HasValue ? response.View.LastRoll.ToString() : "—"));
-            GUI.Label(new Rect(455,875,800,100), status);
-            GUILayout.BeginArea(new Rect(20,70,400,900), GUI.skin.box); leftScroll = GUILayout.BeginScrollView(leftScroll);
-            GUI.enabled = !busy;
-            GUILayout.Label("Players (2–4, comma separated)"); names = GUILayout.TextField(names); GUILayout.Label("Random seed"); seed = GUILayout.TextField(seed);
-            if (GUILayout.Button("New game")) NewGame();
-            if (response != null)
+            if(skin==null||board==null)return;
+            scale=Mathf.Min(Screen.width/1600f,Screen.height/900f);offset=new Vector2((Screen.width-1600*scale)/2,(Screen.height-900*scale)/2);
+            board.SetViewport(new Rect(offset.x+viewport.x*scale,offset.y+viewport.y*scale,viewport.width*scale,viewport.height*scale));
+            var old=GUI.matrix;mouse=(Event.current.mousePosition-offset)/scale;GUI.matrix=Matrix4x4.TRS(offset,Quaternion.identity,Vector3.one*scale);
+            GUI.enabled=modal=="";
+            skin.Box(new Rect(0,0,1600,105),skin.Background);skin.Box(new Rect(0,105,260,795),skin.Background);skin.Box(new Rect(260,665,1340,235),skin.Background);
+            Header();Players();Hand();Tray();
+            if(response!=null)
             {
-                GUILayout.Space(12); GUILayout.Label("Selected actor / private hand");
-                foreach (var p in response.View.Players) if (GUILayout.Button((actor == p.Id ? "● " : "") + p.Id + (p.Ready ? " / ready" : ""))) SelectActor(p.Id);
-                if (response.View.ActivePlayer != null && GUILayout.Button("Switch to active player")) SelectActor(response.View.ActivePlayer);
-                Button("Ready", "Ready"); Button("Start (host)", "Start");
-                GUILayout.Space(12); GUILayout.Label("Click a hex, edge or vertex to select its ID.");
-                GUILayout.Label("Target ID"); target = GUILayout.TextField(target); GUILayout.Label("Second road ID (-1 if none)"); secondTarget = GUILayout.TextField(secondTarget);
-                Button("Place initial settlement", "PlaceSettlement"); Button("Place initial road", "PlaceRoad"); Button("Roll dice", "Roll");
-                Button("Build road", "BuildRoad"); Button("Build settlement", "BuildSettlement"); Button("Upgrade city", "BuildCity"); Button("Buy development card", "BuyCard");
-                Button("Move robber to selected hex", "MoveRobber"); GUILayout.Label("Victim / trading partner"); partner = GUILayout.TextField(partner); Button("Choose robber victim", "ChooseVictim");
-                Button("End turn", "EndTurn"); Button("Disconnect selected actor", "Disconnect"); Button("Reconnect selected actor", "Reconnect"); Button("Surrender permanently", "Surrender");
+                skin.Text(new Rect(300,116,1260,50),ClientActions.Instruction(response.View.Phase),24,skin.Ink,TextAnchor.MiddleCenter);
+                if(!MyTurn&&response.View.Phase!="Finished"&&response.View.Phase!="Abandoned"&&response.View.Phase!="Discard")
+                {
+                    skin.Box(new Rect(620,315,600,155),skin.Panel);skin.Text(new Rect(645,330,550,55),"Pass the table to "+response.View.ActivePlayer,28,skin.Ink,TextAnchor.MiddleCenter);
+                    if(skin.Button(new Rect(730,395,380,52),"Continue as "+response.View.ActivePlayer,!busy,true))SelectActor(response.View.ActivePlayer);
+                }
+                if(response.View.Phase=="Victim"&&MyTurn&&modal=="")Victims();
+                if(response.View.Winner!=null){skin.Box(new Rect(640,310,580,160),skin.Panel);skin.Text(new Rect(660,330,540,100),response.View.Winner+" wins!",40,skin.Gold,TextAnchor.MiddleCenter);}
             }
-            GUILayout.EndScrollView(); GUILayout.EndArea();
-            GUILayout.BeginArea(new Rect(1300,70,280,900), GUI.skin.box); rightScroll = GUILayout.BeginScrollView(rightScroll);
-            if (response != null)
-            {
-                var view = response.View; var me = view.Players.First(p => p.Id == actor);
-                GUI.enabled = true; GUILayout.Label("GAME " + view.RoomCode); GUILayout.Label("Viewing: " + actor);
-                if (view.Winner != null) GUILayout.Label("WINNER: " + view.Winner);
-                long now = response.ServerMilliseconds + (long)((Time.unscaledTime - receivedAt) * 1000);
-                if (view.DeadlineMilliseconds.HasValue) GUILayout.Label("Phase timer: " + Math.Max(0,(view.DeadlineMilliseconds.Value-now)/1000) + "s");
-                if (view.ActionDeadlineMilliseconds.HasValue) GUILayout.Label("Action timer: " + Math.Max(0,(view.ActionDeadlineMilliseconds.Value-now)/1000) + "s");
-                foreach (var p in view.Players) GUILayout.Label(p.Id + ": " + p.PublicPoints + " visible VP / " + p.ResourceCount + " resources / " + p.DevelopmentCardCount + " cards" + (p.Surrendered ? " / surrendered" : !p.Connected ? " / offline" : ""));
-                GUILayout.Label("Your total VP: " + me.TotalPoints); GUILayout.Label("Your resources:");
-                for (int i = 0; i < resources.Length; i++) GUILayout.Label(resources[i] + ": " + me.Resources[i] + " (bank " + view.Bank[i] + ")");
-                GUILayout.Label("Your cards: " + string.Join(", ", me.Cards));
-                GUILayout.Label("Longest road: " + (view.LongestRoad ?? "none") + " / Army: " + (view.LargestArmy ?? "none"));
-                if (view.RequiredDiscards.TryGetValue(actor, out var count)) GUILayout.Label("You must discard " + count);
-                if (view.EligibleVictims.Length > 0) GUILayout.Label("Victims: " + string.Join(", ", view.EligibleVictims));
-                GUI.enabled = !busy;
-                GUILayout.Space(10); GUILayout.Label("Bundles: brick,lumber,wool,grain,ore"); GUILayout.Label("Give / discard"); give = GUILayout.TextField(give); GUILayout.Label("Take / Year of Plenty"); take = GUILayout.TextField(take);
-                Button("Discard required resources", "Discard", true); Button("Bank / harbor trade", "BankTrade", true); Button("Offer player trade", "OfferTrade", true);
-                GUILayout.Label("Offer ID"); offerId = GUILayout.TextField(offerId); Button("Accept offer", "AcceptTrade"); Button("Cancel offer", "CancelTrade");
-                foreach (var trade in view.Trades) GUILayout.Label("#" + trade.Id + " " + trade.From + " → " + trade.To + "\nGive " + string.Join(",",trade.Give) + " / take " + string.Join(",",trade.Take));
-                GUILayout.Label("Resource for Monopoly"); foreach (string r in resources) if (GUILayout.Button((resource == r ? "● " : "") + r)) resource = r;
-                Button("Play Knight", "PlayKnight"); Button("Play Road Building", "PlayRoadBuilding"); Button("Play Year of Plenty", "PlayYearOfPlenty", true); Button("Play Monopoly", "PlayMonopoly", false, true);
-                GUILayout.Label("Legal roads: " + string.Join(",", response.LegalRoads)); GUILayout.Label("Legal settlements: " + string.Join(",", response.LegalSettlements));
-                GUILayout.Label("Bank ratios: " + string.Join(",", response.TradeRatios));
-            }
-            GUI.enabled = true; GUILayout.EndScrollView(); GUILayout.EndArea(); GUI.matrix = originalMatrix;
+            skin.Text(new Rect(285,861,1285,33),status,18,skin.Muted);
+            GUI.enabled=true;
+            if(modal=="New")NewDialog();else if(modal=="Cards")Cards();else if(modal=="Trade"||modal=="Discard"||modal=="Plenty"||modal=="Monopoly")ResourceDialog();
+            DragEvents();GUI.matrix=old;
         }
-        private void Button(string label, string kind, bool bundles = false, bool useResource = false) { if (GUILayout.Button(label)) Command(kind, bundles, useResource); }
-        private void OnDestroy() { destroyed = true; transport?.Dispose(); }
+        private void Header()
+        {
+            skin.Text(new Rect(26,20,230,60),"CATAN",34,skin.Gold);
+            if(response==null){skin.Text(new Rect(300,22,800,60),"Local hot-seat • Unity desktop",24);return;}
+            var v=response.View;
+            skin.Text(new Rect(300,18,790,35),"TURN "+v.Turn+"   /   "+(v.ActivePlayer??"Lobby"),25,BoardRenderer.PlayerColor(v,v.ActivePlayer));
+            skin.Text(new Rect(300,55,790,32),"Dice total: "+(v.LastRoll.HasValue?v.LastRoll.Value.ToString():"—")+"   •   "+PhaseLabel(v.Phase),18,skin.Muted);
+            double rem=ClientActions.Remaining(response,Time.unscaledTime-receivedAt);
+            skin.Timer(new Rect(1130,8,86,86),rem,v.Phase=="Action"?90:v.Phase=="AwaitRoll"?15:v.Phase=="ReconnectGrace"?10:30);
+            skin.Text(new Rect(1227,19,140,58),"TIME LEFT",16,skin.Muted);
+            if(skin.Button(new Rect(1390,24,180,52),"New game",!busy)){modal="New";}
+        }
+        private static string PhaseLabel(string phase){switch(phase){case "SetupSettlement":case "SetupRoad":return "Initial placement";case "AwaitRoll":return "Roll phase";case "Action":return "Build & trade";case "Discard":return "Discard resources";case "Robber":case "Victim":return "Robber";default:return phase;}}
+        private void Players()
+        {
+            if(response==null)return;var v=response.View;skin.Text(new Rect(22,120,215,40),"AT THE TABLE",17,skin.Muted);
+            for(int i=0;i<v.Players.Length;i++)
+            {
+                var p=v.Players[i];float y=170+i*108;skin.Box(new Rect(18,y,224,98),p.Id==actor?new Color(.14f,.25f,.27f):skin.Panel);
+                skin.Box(new Rect(18,y,5,98),BoardRenderer.PlayerColor(v,p.Id));
+                if(skin.Button(new Rect(35,y+9,190,32),p.Id+ (p.Id==v.ActivePlayer?" •":""),!busy))SelectActor(p.Id);
+                skin.Text(new Rect(35,y+44,200,24),p.PublicPoints+" VP    "+p.ResourceCount+" resources",16,skin.Muted);
+                skin.Text(new Rect(35,y+67,200,24),p.Surrendered?"Surrendered":!p.Connected?"Disconnected":p.DevelopmentCardCount+" development cards",14,skin.Muted);
+                if(v.RequiredDiscards.ContainsKey(p.Id))skin.Text(new Rect(35,y+44,200,24),"Must discard "+v.RequiredDiscards[p.Id],16,skin.Gold);
+            }
+            skin.Text(new Rect(22,620,220,60),"Longest road\n"+(v.LongestRoad??"Unclaimed"),17,skin.Muted);skin.Text(new Rect(22,697,220,60),"Largest army\n"+(v.LargestArmy??"Unclaimed"),17,skin.Muted);
+            if(Me!=null&&Me.Cards.Length>0&&skin.Button(new Rect(22,791,220,52),"Development cards",!busy))modal="Cards";
+        }
+        private void Hand()
+        {
+            if(Me==null)return;
+            skin.Text(new Rect(285,675,900,28),actor+"’s hand   /   "+Me.TotalPoints+" total VP",18,BoardRenderer.PlayerColor(response.View,actor));
+            for(int i=0;i<5;i++)
+            {
+                float x=285+i*172;skin.Box(new Rect(x,714,156,70),skin.Panel);skin.Icon(new Rect(x+10,728,42,42),resources[i],ResourceColor(i));
+                skin.Text(new Rect(x+63,715,80,35),Me.Resources[i].ToString(),27);skin.Text(new Rect(x+63,752,85,25),resources[i],15,skin.Muted);
+            }
+            bool offers=response.View.Trades.Any(t=>t.To==actor);
+            if(skin.Button(new Rect(1195,710,180,70),"Roll dice",!busy&&MyTurn&&response.View.Phase=="AwaitRoll",true))Execute(Intent("Roll",actor));
+            skin.Icon(new Rect(1204,726,26,26),"Dice",skin.Background);
+            if(skin.Button(new Rect(1390,710,180,70),offers?"Trade offer":"Trade",!busy&&response.View.Phase=="Action"&&(MyTurn||offers)))Open("Trade");
+            if(skin.Button(new Rect(1390,796,180,50),"End turn",!busy&&MyTurn&&response.View.Phase=="Action"))Execute(Intent("EndTurn",actor));
+        }
+        private void Tray()
+        {
+            if(response==null)return;
+            string[] pieces=response.View.Phase=="Robber"?new[]{"Robber"}:new[]{"Settlement","Road","City"};
+            for(int i=0;i<pieces.Length;i++)
+            {
+                string piece=pieces[i];float x=285+i*230;var rect=new Rect(x,800,218,52);
+                int used=piece=="Road"?response.View.Edges.Count(e=>e.Owner==actor):response.View.Vertices.Count(v=>v.Owner==actor&&v.Level==(piece=="City"?2:1));
+                int left=piece=="Road"?15-used:piece=="City"?4-used:5-used;
+                bool enabled=!busy&&MyTurn&&(piece=="Robber"?response.View.Phase=="Robber":piece=="Road"?response.View.Phase=="SetupRoad"||response.View.Phase=="Action"||freeRoads:piece=="Settlement"?response.View.Phase=="SetupSettlement"||response.View.Phase=="Action":response.View.Phase=="Action");
+                skin.Box(rect,enabled?new Color(.18f,.30f,.32f):skin.Panel);skin.Icon(new Rect(x+10,804,42,42),piece,enabled?BoardRenderer.PlayerColor(response.View,actor):skin.Muted);
+                skin.Text(new Rect(x+60,801,150,30),piece+(piece=="Robber"?"":" ×"+left),18,enabled?skin.Ink:skin.Muted);
+                if(piece!="Robber"&&response.View.Phase=="Action")CostIcons(x+60,833,piece);
+                if(enabled&&modal==""&&Event.current.type==EventType.MouseDown&&Event.current.button==0&&rect.Contains(mouse))
+                {dragging=piece;board.Focus(piece,freeRoads?secondRoads:null,firstRoad);Event.current.Use();}
+            }
+            if(freeRoads){skin.Text(new Rect(995,798,370,50),firstRoad<0?"Drag two free roads":"Drag your second free road",18,skin.Gold);if(skin.Button(new Rect(995,843,200,30),"Cancel free roads",!busy)){CancelFreeRoads();}}
+            else if(response.View.Phase=="Action"&&skin.Button(new Rect(995,800,380,52),"Buy development card",!busy&&MyTurn))Execute(Intent("BuyCard",actor));
+        }
+        private void CostIcons(float x,float y,string piece)
+        {
+            if(response.Costs==null||!response.Costs.TryGetValue(piece,out var cost))return;
+            for(int r=0;r<5;r++)if(cost[r]>0){skin.Icon(new Rect(x,y,14,14),resources[r],ResourceColor(r));skin.Text(new Rect(x+15,y-2,15,18),cost[r].ToString(),12,skin.Muted);x+=31;}
+        }
+        private void DragEvents()
+        {
+            if(dragging==null)return;
+            skin.Icon(new Rect(mouse.x-32,mouse.y-32,64,64),dragging,BoardRenderer.PlayerColor(response.View,actor));
+            if(Event.current.type==EventType.MouseDrag){Event.current.Use();}
+            if(Event.current.type==EventType.MouseUp&&Event.current.button==0)
+            {
+                string piece=dragging;dragging=null;Vector2 physical=new Vector2(offset.x+mouse.x*scale,Screen.height-offset.y-mouse.y*scale);
+                int id=board.Pick(physical,piece=="Road"?"Edge":piece=="Robber"?"Hex":"Vertex");
+                board.Focus(freeRoads?"Road":null,secondRoads,firstRoad);Drop(piece,id);Event.current.Use();
+            }
+            if(Event.current.type==EventType.KeyDown&&Event.current.keyCode==KeyCode.Escape){dragging=null;board.Focus(freeRoads?"Road":null,secondRoads,firstRoad);Event.current.Use();}
+        }
+        private void Overlay(Rect rect,string title)
+        {
+            skin.Box(new Rect(0,0,1600,900),new Color(0,0,0,.65f));skin.Box(rect,skin.Panel);skin.Text(new Rect(rect.x+30,rect.y+18,rect.width-60,48),title,28,skin.Gold);
+        }
+        private void NewDialog()
+        {
+            Overlay(new Rect(500,155,600,600),"Start a local game");skin.Text(new Rect(535,225,530,42),"Pass-and-play on this computer",20,skin.Muted);
+            for(int n=2;n<=4;n++)if(skin.Button(new Rect(535+(n-2)*175,282,158,48),n+" players"+(playerCount==n?" ✓":""),!busy))playerCount=n;
+            Color[] seats={new Color(.93f,.38f,.28f),new Color(.26f,.65f,.96f),new Color(.95f,.78f,.28f),new Color(.83f,.79f,.93f)};
+            for(int i=0;i<playerCount;i++){skin.Icon(new Rect(535,355+i*58,38,38),"Settlement",seats[i]);skin.Text(new Rect(580,352+i*58,95,42),"Player "+(i+1),18,seats[i]);names[i]=skin.Field(new Rect(690,352+i*58,365,42),names[i]);}
+            skin.Text(new Rect(535,605,130,40),"Board seed",18,skin.Muted);seed=skin.Field(new Rect(675,605,180,40),seed);
+            if(skin.Button(new Rect(535,674,355,54),busy?"Starting…":"Start game",!busy&&transport!=null,true))NewGame();
+            if(response!=null&&skin.Button(new Rect(905,674,150,54),"Cancel",!busy))modal="";
+            skin.Text(new Rect(510,760,580,95),status,17,skin.Ink,TextAnchor.MiddleCenter);
+        }
+        private void Victims()
+        {
+            Overlay(new Rect(600,265,620,330),"Choose a player to steal from");
+            for(int i=0;i<response.View.EligibleVictims.Length;i++){string p=response.View.EligibleVictims[i];if(skin.Button(new Rect(645,350+i*65,530,50),p,!busy)){var cmd=Intent("ChooseVictim",actor);cmd.OtherPlayer=p;Execute(cmd);}}
+        }
+        private void ResourceDialog()
+        {
+            bool trade=modal=="Trade",discard=modal=="Discard",monopoly=modal=="Monopoly";
+            Overlay(new Rect(470,140,910,655),discard?"Discard "+response.View.RequiredDiscards[actor]+" resources":trade?"Trade resources":monopoly?"Choose a resource":"Choose your two resources");
+            skin.Text(new Rect(510,210,820,34),"Timer keeps running while you choose.",17,skin.Muted);
+            if(trade)
+            {
+                skin.Text(new Rect(510,260,130,35),"Partner",18);float x=650;
+                foreach(var p in response.View.Players.Where(p=>p.Id!=actor)){if(skin.Button(new Rect(x,254,190,40),p.Id+(partner==p.Id?" ✓":""),!busy))partner=p.Id;x+=210;}
+            }
+            skin.Text(new Rect(820,302,185,30),discard?"Discard":"Give",18,skin.Muted);skin.Text(new Rect(1080,302,190,30),"Receive",18,skin.Muted);
+            for(int i=0;i<5;i++)
+            {
+                float y=345+i*58;skin.Icon(new Rect(510,y,40,40),resources[i],ResourceColor(i));skin.Text(new Rect(562,y,215,40),resources[i]+(trade?"  "+response.TradeRatios[i]+":1":""),20);
+                if(monopoly){if(skin.Button(new Rect(820,y,420,40),"Take all "+resources[i],!busy)){var cmd=Intent("PlayMonopoly",actor);cmd.Resource=resources[i];Execute(cmd);}continue;}
+                if(trade||discard)Stepper(815,y,give,i,Me.Resources[i]);
+                if(!discard)Stepper(1070,y,take,i,trade?19:response.View.Bank[i]);
+            }
+            if(discard){if(skin.Button(new Rect(515,660,390,54),"Discard selected ("+give.Sum()+")",!busy,true)){var cmd=Intent("Discard",actor);cmd.Give=(int[])give.Clone();Execute(cmd);}}
+            else if(modal=="Plenty"){if(skin.Button(new Rect(515,660,390,54),"Take selected ("+take.Sum()+")",!busy,true)){var cmd=Intent("PlayYearOfPlenty",actor);cmd.Take=(int[])take.Clone();Execute(cmd);}}
+            else if(trade)
+            {
+                if(skin.Button(new Rect(515,660,260,50),"Bank / port trade",!busy&&MyTurn,true))Trade("BankTrade");
+                if(skin.Button(new Rect(790,660,260,50),"Offer to "+partner,!busy&&MyTurn))Trade("OfferTrade");
+                int row=0;foreach(var offer in response.View.Trades.Where(t=>t.To==actor||t.From==actor))
+                {
+                    if(row>=2)break;float y=725+row*45;skin.Text(new Rect(510,y,500,36),offer.From+" gives "+BundleText(offer.Give)+" for "+BundleText(offer.Take),14);
+                    if(offer.To==actor&&skin.Button(new Rect(1020,y,145,35),"Accept",!busy)){Execute(Intent("AcceptTrade",actor,offer.Id));}
+                    if(skin.Button(new Rect(1180,y,145,35),"Cancel offer",!busy))Execute(Intent("CancelTrade",actor,offer.Id));row++;
+                }
+            }
+            if(!discard&&skin.Button(new Rect(1090,660,240,50),"Close",!busy))modal="";
+            skin.Text(new Rect(490,805,870,45),status,18,skin.Ink,TextAnchor.MiddleCenter);
+        }
+        private void Stepper(float x,float y,int[] values,int i,int limit)
+        {
+            if(skin.Button(new Rect(x,y,45,40),"−",!busy&&values[i]>0))values[i]--;
+            skin.Text(new Rect(x+50,y,58,40),values[i].ToString(),23,skin.Ink,TextAnchor.MiddleCenter);
+            if(skin.Button(new Rect(x+115,y,45,40),"+",!busy&&values[i]<limit))values[i]++;
+        }
+        private void Trade(string kind){var cmd=Intent(kind,actor);cmd.OtherPlayer=partner;cmd.Give=(int[])give.Clone();cmd.Take=(int[])take.Clone();Execute(cmd);}
+        private string BundleText(int[] bundle)=>string.Join(", ",resources.Where((r,i)=>bundle[i]>0).Select(r=>bundle[Array.IndexOf(resources,r)]+" "+r));
+        private void Cards()
+        {
+            Overlay(new Rect(540,200,740,500),"Your development cards");int row=0;
+            foreach(string card in Me.Cards.Distinct())
+            {
+                string held=card;skin.Text(new Rect(575,285+row*65,320,50),card+" ×"+Me.Cards.Count(c=>c==card),21);
+                if(card!="VictoryPoint"&&skin.Button(new Rect(920,285+row*65,310,50),"Play",!busy&&MyTurn))
+                {
+                    if(held=="RoadBuilding"){modal="";freeRoads=true;firstRoad=-1;secondRoads=null;board.Focus("Road");status="Drag a road from the tray to begin two free roads.";}
+                    else if(held=="YearOfPlenty")Open("Plenty");else if(held=="Monopoly")Open("Monopoly");else Execute(Intent("PlayKnight",actor));
+                }
+                row++;
+            }
+            skin.Text(new Rect(575,615,655,32),"Cards bought this turn cannot be played. One action card per turn.",16,skin.Muted);
+            if(skin.Button(new Rect(920,650,310,40),"Close",!busy))modal="";
+        }
+        private Color ResourceColor(int i){Color[] colors={new Color(.96f,.52f,.37f),new Color(.4f,.8f,.56f),new Color(.77f,.88f,.61f),new Color(.97f,.81f,.37f),new Color(.65f,.77f,.9f)};return colors[i];}
+        private void OnDestroy(){destroyed=true;transport?.Dispose();skin?.Dispose();}
     }
 }

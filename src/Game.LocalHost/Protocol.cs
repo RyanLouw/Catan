@@ -5,7 +5,8 @@ namespace Game.LocalHost;
 public sealed record Request(string Id, string Op, string? Viewer = null, ulong Seed = 1,
     string[]? Players = null, Command? Command = null);
 public sealed record Response(string Id, bool Success, string Message, long ServerMilliseconds,
-    GameView? View = null, int[]? LegalRoads = null, int[]? LegalSettlements = null, int[]? TradeRatios = null);
+    GameView? View = null, int[]? LegalRoads = null, int[]? LegalSettlements = null, int[]? TradeRatios = null, int[]? LegalCities = null,
+    IReadOnlyDictionary<string, int[]>? Costs = null);
 
 /// <summary>Offline process boundary. Networking/authentication can replace this adapter without changing the engine.</summary>
 public sealed class Session(IClock? clock = null)
@@ -35,7 +36,7 @@ public sealed class Session(IClock? clock = null)
                     engine = next;
                 }
                 else if (engine == null) return Error(request, "Create a game first.");
-                else if (request.Op is not ("view" or "command")) return Error(request, "Unknown operation.");
+                else if (request.Op is not ("view" or "command" or "preview-roads")) return Error(request, "Unknown operation.");
                 // V1 is a trusted local hot-seat adapter. V2 must authenticate and bind actor/viewer IDs.
                 var before = engine!.View(request.Viewer ?? "");
                 engine.Tick();
@@ -48,10 +49,23 @@ public sealed class Session(IClock? clock = null)
                 }
                 var view = engine.View(before.Players.Single(p => p.Id == request.Viewer).Id);
                 string viewer = request.Viewer!;
+                int[] roads = engine.LegalRoads(viewer, view.Phase == Phase.SetupRoad).ToArray();
+                if (request.Op == "preview-roads")
+                {
+                    if (request.Command == null || request.Command.Player != viewer) return Error(request, "Preview actor must match viewer.");
+                    var preview = engine.PreviewRoadBuilding(viewer, request.Command.Target);
+                    if (!preview.Valid) return Error(request, "This road-building card or first road is not legal.");
+                    roads = preview.SecondRoads;
+                }
                 return new(request.Id, resultCommand?.Success ?? true, resultCommand?.Message ?? "OK", clock.Milliseconds, view,
-                    engine.LegalRoads(viewer, view.Phase == Phase.SetupRoad).ToArray(),
+                    roads,
                     engine.LegalSettlements(viewer, view.Phase == Phase.SetupSettlement).ToArray(),
-                    view.Hexes.Count > 0 ? Enum.GetValues<Resource>().Select(r => engine.TradeRatio(viewer, r)).ToArray() : []);
+                    view.Hexes.Count > 0 ? Enum.GetValues<Resource>().Select(r => engine.TradeRatio(viewer, r)).ToArray() : [],
+                    engine.LegalCities(viewer).ToArray(), new Dictionary<string, int[]>
+                    {
+                        ["Road"] = Game.Engine.Costs.Road, ["Settlement"] = Game.Engine.Costs.Settlement,
+                        ["City"] = Game.Engine.Costs.City, ["Development"] = Game.Engine.Costs.Development
+                    });
             }
             catch (ArgumentException e) { return Error(request, e.Message); }
         }

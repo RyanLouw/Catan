@@ -9,6 +9,7 @@
     <ProjectReference Include="../../src/Game.LocalHost/Game.LocalHost.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="../../unity/Catan.Client/Assets/Catan/Runtime/ClientActions.cs" Link="UnityClient/ClientActions.cs" />
     <Compile Include="../../unity/Catan.Client/Assets/Catan/Runtime/Wire.cs" Link="UnityClient/Wire.cs" />
     <Compile Include="../../unity/Catan.Client/Assets/Catan/Runtime/LocalProcessTransport.cs" Link="UnityClient/LocalProcessTransport.cs" />
   </ItemGroup>

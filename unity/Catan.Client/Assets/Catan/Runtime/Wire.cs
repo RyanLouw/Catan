@@ -25,7 +25,8 @@ namespace Catan.Client
         public bool Success;
         public long ServerMilliseconds;
         public Snapshot View;
-        public int[] LegalRoads, LegalSettlements, TradeRatios;
+        public int[] LegalRoads, LegalSettlements, TradeRatios, LegalCities;
+        public Dictionary<string, int[]> Costs;
     }
     [Serializable] public sealed class Snapshot
     {
