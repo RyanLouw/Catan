@@ -55,7 +55,7 @@ namespace Catan.Client
             }
             foreach(var point in points)Box(new Rect(rect.x+point.x*rect.width-pip/2,rect.y+point.y*rect.height-pip/2,pip,pip),rolling?Muted:Background);
         }
-        private static Texture2D CreateIcon(string kind)
+        public static Texture2D CreateIcon(string kind)
         {
             var t=new Texture2D(64,64,TextureFormat.RGBA32,false){filterMode=FilterMode.Bilinear};var colors=new Color[4096];
             for(int y=0;y<64;y++)for(int x=0;x<64;x++)
@@ -76,9 +76,17 @@ namespace Catan.Client
                     case "Trade":fill=Math.Abs(v-.35f)<.05f&&u>.16f&&u<.8f||Math.Abs(v-.65f)<.05f&&u>.2f&&u<.84f||u>.7f&&u<.9f&&Math.Abs(v-.35f)<(.9f-u)*.8f||u>.1f&&u<.3f&&Math.Abs(v-.65f)<(u-.1f)*.8f;break;
                     default:fill=u>.2f&&u<.8f&&v>.1f&&v<.9f;break;
                 }
-                colors[y*64+x]=fill?Color.white:Color.clear;
+                colors[y*64+x]=fill?new Color(.72f+.28f*v,.72f+.28f*v,.72f+.28f*v,1):Color.clear;
             }
-            t.SetPixels(colors);t.Apply();return t;
+            // A dark contour and offset shadow keep small resource silhouettes readable.
+            var shaded=(Color[])colors.Clone();
+            for(int y=1;y<63;y++)for(int x=1;x<63;x++)
+            {
+                int i=y*64+x;
+                if(colors[i].a==0 && (colors[i-1].a>0||colors[i+1].a>0||colors[i-64].a>0||colors[i+64].a>0))shaded[i]=new Color(.22f,.26f,.28f,1);
+                if(colors[i].a==0&&shaded[i].a==0&&x>2&&y<61&&colors[(y+2)*64+x-2].a>0)shaded[i]=new Color(.12f,.16f,.18f,.5f);
+            }
+            t.SetPixels(shaded);t.Apply();return t;
         }
         private static bool Circle(float x,float y,float cx,float cy,float r)=>Math.Pow(x-cx,2)+Math.Pow(y-cy,2)<r*r;
         public void Dispose(){foreach(var i in icons.Values)UnityEngine.Object.Destroy(i);UnityEngine.Object.Destroy(dial);}

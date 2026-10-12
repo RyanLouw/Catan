@@ -223,7 +223,7 @@ namespace Catan.Client
         private void Header()
         {
             skin.Text(new Rect(26,20,230,60),"CATAN",34,skin.Gold);
-            skin.Text(new Rect(27,76,220,23),"V2 • UI build 0.5",14,skin.Muted);
+            skin.Text(new Rect(27,76,220,23),"V2 • UI build 0.6",14,skin.Muted);
             if(response==null){skin.Text(new Rect(300,22,800,60),"Local hot-seat • Unity desktop",24);return;}
             var v=response.View;
             skin.Text(new Rect(300,18,790,35),(v.Turn==0?"INITIAL SETUP":"TURN "+v.Turn)+"   /   "+(v.ActivePlayer??"Lobby"),25,BoardRenderer.PlayerColor(v,v.ActivePlayer));
