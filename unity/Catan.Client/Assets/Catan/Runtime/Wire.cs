@@ -36,6 +36,7 @@ namespace Catan.Client
         public long Version;
         public int Turn, RobberHex, DevelopmentDeckCount;
         public int? LastRoll;
+        public DiceResult Dice;
         public long? DeadlineMilliseconds, ActionDeadlineMilliseconds, RollDeadlineMilliseconds;
         public Terrain[] Hexes;
         public Intersection[] Vertices;
@@ -46,6 +47,12 @@ namespace Catan.Client
         public int[] Bank;
         public Dictionary<string, int> RequiredDiscards;
         public string[] EligibleVictims;
+    }
+    [Serializable] public sealed class DiceResult
+    {
+        public int First, Second, Total;
+        public int[] ResourcesReceived;
+        public Dictionary<string,int> PlayerResourceCounts;
     }
     [Serializable] public sealed class TimingProfile
     {

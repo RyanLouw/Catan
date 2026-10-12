@@ -64,14 +64,21 @@ public sealed partial class GameEngine
     }
     private static void ResolveRoll(State s, long now)
     {
-        s.Roll = s.Random.Next(6) + s.Random.Next(6) + 2; s.RobberReturn = Phase.Action;
+        s.FirstDie=s.Random.Next(6)+1;s.SecondDie=s.Random.Next(6)+1;
+        s.Roll=s.FirstDie+s.SecondDie;s.Production.Clear();s.RobberReturn=Phase.Action;
         if (s.Roll == 7)
         {
             s.Discards = s.Players.Select((p, i) => (i, Count: p.Resources.Sum())).Where(x => x.Count > 7).ToDictionary(x => x.i, x => x.Count / 2);
             if (s.Discards.Count > 0) { s.Phase = Phase.Discard; s.Deadline = now + s.Timing.MandatoryMilliseconds; }
             else BeginRobber(s, now);
         }
-        else { Produce(s, s.Roll.Value); BeginAction(s, now); }
+        else
+        {
+            var before=s.Players.Select(p=>(int[])p.Resources.Clone()).ToArray();
+            Produce(s,s.Roll.Value);
+            for(int p=0;p<s.Players.Count;p++)s.Production[p]=Enumerable.Range(0,5).Select(r=>s.Players[p].Resources[r]-before[p][r]).ToArray();
+            BeginAction(s,now);
+        }
     }
     internal static void Produce(State s, int roll)
     {
@@ -116,7 +123,7 @@ public sealed partial class GameEngine
     private static void BeginRoll(State s, long now) { s.Phase = Phase.AwaitRoll; s.RollDeadline = now + s.Timing.RollMilliseconds; s.Deadline = s.RollDeadline; }
     private static void BeginTurn(State s, long now)
     {
-        s.Roll = null; s.PlayedCard = false; s.ActionDeadline = null; s.RollDeadline = null; s.Trades.Clear();
+        s.Roll = null; s.FirstDie = null; s.SecondDie = null; s.Production.Clear(); s.PlayedCard = false; s.ActionDeadline = null; s.RollDeadline = null; s.Trades.Clear();
         if (s.Players.All(p => p.Surrendered)) { s.Phase = Phase.Abandoned; s.Deadline = null; return; }
         if (s.Players[s.Active].Surrendered) { NextTurn(s, now); return; }
         if (!s.Players[s.Active].Connected) { s.Phase = Phase.ReconnectGrace; s.Deadline = now + 10_000; }

@@ -39,6 +39,22 @@ namespace Catan.Client
             }
             GUI.DrawTexture(rect,dial);Text(rect,Math.Ceiling(remaining).ToString("0"),29,accent,TextAnchor.MiddleCenter);
         }
+        public void Die(Rect rect,int value,bool rolling=false)
+        {
+            Box(rect,new Color(.95f,.95f,.9f));
+            float pip=rect.width*.12f;
+            Vector2[] points;
+            switch(value)
+            {
+                case 1:points=new[]{new Vector2(.5f,.5f)};break;
+                case 2:points=new[]{new Vector2(.28f,.28f),new Vector2(.72f,.72f)};break;
+                case 3:points=new[]{new Vector2(.28f,.28f),new Vector2(.5f,.5f),new Vector2(.72f,.72f)};break;
+                case 4:points=new[]{new Vector2(.28f,.28f),new Vector2(.72f,.28f),new Vector2(.28f,.72f),new Vector2(.72f,.72f)};break;
+                case 5:points=new[]{new Vector2(.28f,.28f),new Vector2(.72f,.28f),new Vector2(.5f,.5f),new Vector2(.28f,.72f),new Vector2(.72f,.72f)};break;
+                default:points=new[]{new Vector2(.28f,.25f),new Vector2(.72f,.25f),new Vector2(.28f,.5f),new Vector2(.72f,.5f),new Vector2(.28f,.75f),new Vector2(.72f,.75f)};break;
+            }
+            foreach(var point in points)Box(new Rect(rect.x+point.x*rect.width-pip/2,rect.y+point.y*rect.height-pip/2,pip,pip),rolling?Muted:Background);
+        }
         private static Texture2D CreateIcon(string kind)
         {
             var t=new Texture2D(64,64,TextureFormat.RGBA32,false){filterMode=FilterMode.Bilinear};var colors=new Color[4096];
