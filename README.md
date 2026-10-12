@@ -2,6 +2,10 @@
 
 A terminal-playable, authoritative implementation of classic base-game Catan for 2–4 players. Original source; no Unity, networking, database, or hosting dependencies. [GAME_RULES.md](GAME_RULES.md) is the supplied gameplay specification.
 
+## Unity offline prototype
+
+The `feature/unity-ui` branch adds a Unity 6 LTS desktop hot-seat UI and a local C# engine host. See [Unity setup and play instructions](unity/README.md). V1 uses a local process; V2 can replace the transport with an authenticated online connection.
+
 ## Run
 
 Requires the pinned .NET 10 SDK on Linux x64. Cloud setup installs it locally and verifies its archive against Microsoft's SHA-512 release metadata:
@@ -54,6 +58,7 @@ Simulations cycle through 2, 3, and 4 players unless a player count is supplied.
 
 - `Game.Contracts`: intent commands and detached per-player snapshots.
 - `Game.Engine`: board generation, seeded randomness, lobby, roll-off, placement, production, robber, building, trading, development cards, graph scoring, victory, timers, reconnection, surrender, command receipts, and headless simulation driver.
+- `Game.LocalHost`: offline JSON process adapter around the engine; no network listener.
 - `Game.Console`: parsing, presentation, actor selection, and the authoritative timer host. It contains no gameplay rules.
 - `Game.Engine.Tests`: deterministic gameplay, rejection, boundary, privacy, graph, timer, isolation, concurrency, and complete-game tests.
 

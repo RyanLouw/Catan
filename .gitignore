@@ -2,3 +2,9 @@
 **/obj/
 TestResults/
 .simulations/
+unity/**/Library/
+unity/**/Temp/
+unity/**/Logs/
+unity/**/UserSettings/
+unity/**/Builds/
+unity/**/Assets/StreamingAssets/Backend/
