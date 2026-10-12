@@ -21,3 +21,7 @@ Disconnecting mid-turn does not reset existing deadlines. Only reaching a discon
 ## Offline testing pace
 
 The user requested both longer turns and a handover break for Unity testing. The Unity create-game screen now enables the relaxed profile by default: 30-second handover, 60-second roll/mandatory choices, and 180-second action phase. Handover can be acknowledged early by the next player and does not consume their roll/placement timer. The original GAME_RULES.md timings remain the standard engine/console profile; the relaxed profile is an explicit offline testing option rather than a silent change to the locked rules.
+
+## Settlement distance confirmed
+
+The user confirmed keeping classic Catan’s settlement-distance rule: neighbouring settlements are prohibited even when both belong to the same player. Initial roads attach to the newly placed settlement; after setup, roads may extend the player’s connected network subject to opponent-building interruptions.

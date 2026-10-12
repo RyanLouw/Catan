@@ -7,9 +7,16 @@ public sealed partial class GameEngine
     {
         s.Started = true; s.Board = Board.Generate(s.Random); s.Robber = Array.FindIndex(s.Board.Hexes, h => h.Resource == null);
         var tied = Enumerable.Range(0, s.Players.Count).ToList();
+        int round=0;
         while (tied.Count > 1)
         {
-            var rolls = tied.Select(p => (Player: p, Roll: s.Random.Next(6) + s.Random.Next(6) + 2)).ToArray();
+            round++;
+            var rolls=tied.Select(p=>
+            {
+                int first=s.Random.Next(6)+1,second=s.Random.Next(6)+1;
+                s.StartingRolls.Add(new StartingRollView(round,s.Players[p].Id,first,second));
+                return (Player:p,Roll:first+second);
+            }).ToArray();
             int max = rolls.Max(x => x.Roll); tied = rolls.Where(x => x.Roll == max).Select(x => x.Player).ToList();
         }
         // Rotate seating after the roll-off; the host remains separately identified by original ID.

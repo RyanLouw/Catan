@@ -29,6 +29,34 @@ public sealed class UnityTransportTests
         var built=await transport.RequestAsync(new HostRequest{Op="command",Viewer=placed.View.ActivePlayer,Command=road});
         Assert.True(built.Success,built.Message);Assert.Contains(built.View.Edges,e=>e.Id==road.Target&&e.Owner==road.Player);
     }
+    [Fact]
+    public async Task CompleteRelaxedDragSetupPlacesBothRoadsThenProducesVisibleDice()
+    {
+        string root=Repository();string dll=Path.Combine(root,"src/Game.LocalHost/bin/Release/net10.0/Game.LocalHost.dll");
+        using var transport=new LocalProcessTransport(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH")??"dotnet","\""+dll+"\"",root);
+        var state=await transport.RequestAsync(new HostRequest{Op="create",Viewer="Ryan",Players=["Ryan","John"],Seed=42,RelaxedTimers=true});
+        foreach(string p in new[]{"Ryan","John"})state=await transport.RequestAsync(new HostRequest{Op="command",Viewer=p,Command=new Intent{Kind="Ready",Player=p,Target=1}});
+        state=await transport.RequestAsync(new HostRequest{Op="command",Viewer="Ryan",Command=new Intent{Kind="Start",Player="Ryan"}});
+        Assert.Equal(4,state.ProtocolVersion);Assert.NotEmpty(state.View.StartingRolls);
+        while(state.View.Turn==0)
+        {
+            string p=state.View.ActivePlayer;
+            state=await transport.RequestAsync(new HostRequest{Op="view",Viewer=p});
+            Intent intent;
+            if(state.View.Phase=="Handover")intent=new Intent{Kind="ContinueTurn",Player=p};
+            else if(state.View.Phase=="SetupSettlement")intent=ClientActions.Drop(state,p,"Settlement",state.LegalSettlements[0]);
+            else intent=ClientActions.Drop(state,p,"Road",state.LegalRoads[0]);
+            Assert.NotNull(intent);state=await transport.RequestAsync(new HostRequest{Op="command",Viewer=p,Command=intent});Assert.True(state.Success,state.Message);
+        }
+        foreach(string p in new[]{"Ryan","John"})
+        {
+            Assert.Equal(2,state.View.Edges.Count(e=>e.Owner==p));Assert.Equal(2,state.View.Vertices.Count(v=>v.Owner==p));
+        }
+        string active=state.View.ActivePlayer;
+        state=await transport.RequestAsync(new HostRequest{Op="command",Viewer=active,Command=new Intent{Kind="ContinueTurn",Player=active}});Assert.True(state.Success);
+        state=await transport.RequestAsync(new HostRequest{Op="command",Viewer=active,Command=new Intent{Kind="Roll",Player=active}});Assert.True(state.Success);
+        Assert.NotNull(state.View.Dice);Assert.Equal(state.View.LastRoll,state.View.Dice.First+state.View.Dice.Second);Assert.Equal(5,state.View.Dice.ResourcesReceived.Length);
+    }
     private static string Repository()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

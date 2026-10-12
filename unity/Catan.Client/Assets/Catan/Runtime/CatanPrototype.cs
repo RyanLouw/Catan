@@ -20,7 +20,8 @@ namespace Catan.Client
         private string seed="42";
         private bool busy,polling,destroyed,freeRoads,relaxedTimers=true;
         private float receivedAt,nextPoll,rollAnimationEnd,rollNoticeEnd;
-        private string lastDiceKey;
+        private string lastDiceKey,startingRollGame;
+        private float startingRollUntil;
         private long renderedVersion=-1,stagedVersion=-1;
         private string renderedActor,lastGame;
         private float scale;
@@ -66,10 +67,12 @@ namespace Catan.Client
             if(transport==null)throw new InvalidOperationException("Backend unavailable. Rebuild Release and restart Play mode. Check Unity Console for details.");
             var incoming=await transport.RequestAsync(request);
             if(destroyed||token!=epoch)return null;
+            if(incoming.ProtocolVersion<4)throw new InvalidOperationException("The C# backend is outdated. Stop Play mode, pull feature/unity-ui, run dotnet build Game.sln -c Release, then restart Play mode.");
             if(incoming.View!=null&&!preview)
             {
                 if(response!=null&&incoming.View.GameId==response.View.GameId&&request.Viewer==actor&&incoming.View.Version<response.View.Version)return incoming;
                 actor=request.Viewer;response=incoming;receivedAt=Time.unscaledTime;
+                if(incoming.View.Turn==0&&incoming.View.StartingRolls!=null&&incoming.View.StartingRolls.Length>0&&startingRollGame!=incoming.View.GameId){startingRollGame=incoming.View.GameId;startingRollUntil=Time.unscaledTime+6;}
                 if(incoming.View.Dice!=null)
                 {
                     string key=incoming.View.GameId+":"+incoming.View.Turn;
@@ -147,7 +150,7 @@ namespace Catan.Client
                 return;
             }
             var command=ClientActions.Drop(response,actor,piece,id);
-            if(command==null){status="That drop is not available. Use a glowing location during your turn.";return;}
+            if(command==null){status=piece=="Road"?(response.View.Turn==0?"In initial setup, each road must touch the settlement you just placed.":"Roads must join your own road or settlement, without crossing an opponent’s building. Roll first, then build."):piece=="Settlement"?"Leave an empty intersection between all settlements, including your own. During normal turns, connect to your road.":"That drop is not available. Use a glowing location during your turn.";return;}
             Execute(command);
         }
         private bool MyTurn=>response!=null&&response.View.ActivePlayer==actor;
@@ -172,6 +175,7 @@ namespace Catan.Client
                     if(skin.Button(new Rect(730,395,380,52),"Continue as "+response.View.ActivePlayer,!busy,true))SelectActor(response.View.ActivePlayer);
                 }
                 if(response.View.Dice!=null&&Time.unscaledTime<rollNoticeEnd&&modal==""&&response.View.Phase!="Victim")DiceNotice();
+                if(response.View.Turn==0&&response.View.StartingRolls!=null&&Time.unscaledTime<startingRollUntil&&modal=="")StartingDice();
                 if(response.View.Phase=="Handover"&&MyTurn&&modal=="")
                 {
                     skin.Box(new Rect(620,315,600,160),skin.Panel);
@@ -185,6 +189,21 @@ namespace Catan.Client
             GUI.enabled=true;
             if(modal=="New")NewDialog();else if(modal=="Cards")Cards();else if(modal=="Trade"||modal=="Discard"||modal=="Plenty"||modal=="Monopoly")ResourceDialog();
             DragEvents();GUI.matrix=old;
+        }
+        private void StartingDice()
+        {
+            var v=response.View;var rolls=v.StartingRolls.GroupBy(r=>r.Player).Select(g=>g.Last()).ToArray();
+            if(rolls.Length==0)return;
+            skin.Box(new Rect(300,176,480,45+rolls.Length*40),skin.Panel);
+            if(skin.Button(new Rect(710,181,58,27),"Hide"))startingRollUntil=0;
+            skin.Text(new Rect(320,180,445,35),"Starting roll-off — "+v.StartingPlayer+" goes first",19,skin.Gold);
+            for(int i=0;i<rolls.Length;i++)
+            {
+                var roll=rolls[i];float y=220+i*40;
+                skin.Text(new Rect(320,y,180,33),roll.Player+" (round "+roll.Round+")",16);
+                skin.Die(new Rect(505,y,30,30),roll.First);skin.Die(new Rect(545,y,30,30),roll.Second);
+                skin.Text(new Rect(592,y,120,33),"= "+(roll.First+roll.Second),20);
+            }
         }
         private void DiceNotice()
         {
@@ -204,10 +223,12 @@ namespace Catan.Client
         private void Header()
         {
             skin.Text(new Rect(26,20,230,60),"CATAN",34,skin.Gold);
+            skin.Text(new Rect(27,76,220,23),"V2 • UI build 0.4",14,skin.Muted);
             if(response==null){skin.Text(new Rect(300,22,800,60),"Local hot-seat • Unity desktop",24);return;}
             var v=response.View;
-            skin.Text(new Rect(300,18,790,35),"TURN "+v.Turn+"   /   "+(v.ActivePlayer??"Lobby"),25,BoardRenderer.PlayerColor(v,v.ActivePlayer));
-            skin.Text(new Rect(300,55,620,32),"Dice total: "+(v.LastRoll.HasValue?v.LastRoll.Value.ToString():"—")+"   •   "+PhaseLabel(v.Phase),18,skin.Muted);
+            skin.Text(new Rect(300,18,790,35),(v.Turn==0?"INITIAL SETUP":"TURN "+v.Turn)+"   /   "+(v.ActivePlayer??"Lobby"),25,BoardRenderer.PlayerColor(v,v.ActivePlayer));
+            string detail=v.Turn==0?"Settlements "+v.Vertices.Count(p=>p.Level>0)+"/"+(v.Players.Length*2)+"  •  Roads "+v.Edges.Count(e=>e.Owner!=null)+"/"+(v.Players.Length*2)+" — dice turns follow setup":"Dice total: "+(v.LastRoll.HasValue?v.LastRoll.Value.ToString():"—")+"   •   "+PhaseLabel(v.Phase);
+            skin.Text(new Rect(300,55,650,32),detail,17,skin.Muted);
             if(v.Dice!=null){skin.Die(new Rect(970,28,42,42),v.Dice.First);skin.Die(new Rect(1025,28,42,42),v.Dice.Second);}
             double rem=ClientActions.Remaining(response,Time.unscaledTime-receivedAt);
             double duration=v.Phase=="Action"?(response.Timing?.ActionMilliseconds??90_000)/1000.0:v.Phase=="AwaitRoll"?(response.Timing?.RollMilliseconds??15_000)/1000.0:v.Phase=="Handover"?(response.Timing?.HandoverMilliseconds??30_000)/1000.0:v.Phase=="ReconnectGrace"?10:(response.Timing?.MandatoryMilliseconds??30_000)/1000.0;
@@ -234,7 +255,8 @@ namespace Catan.Client
         private void Hand()
         {
             if(Me==null)return;
-            skin.Text(new Rect(285,675,900,28),actor+"’s hand   /   "+Me.TotalPoints+" total VP",18,BoardRenderer.PlayerColor(response.View,actor));
+            string receipt=response.View.Dice==null?"":response.View.Dice.Total==7?"  •  Rolled 7: no production":"  •  Last roll: "+(response.View.Dice.ResourcesReceived.Sum()==0?"no resources":BundleText(response.View.Dice.ResourcesReceived));
+            skin.Text(new Rect(285,675,900,28),actor+"’s hand   /   "+Me.TotalPoints+" total VP"+receipt,17,BoardRenderer.PlayerColor(response.View,actor));
             for(int i=0;i<5;i++)
             {
                 float x=285+i*172;skin.Box(new Rect(x,714,156,70),skin.Panel);skin.Icon(new Rect(x+10,728,42,42),resources[i],ResourceColor(i));

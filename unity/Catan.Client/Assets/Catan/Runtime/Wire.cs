@@ -23,6 +23,7 @@ namespace Catan.Client
     [Serializable] public sealed class HostResponse
     {
         public string Id, Message;
+        public int ProtocolVersion;
         public bool Success;
         public long ServerMilliseconds;
         public Snapshot View;
@@ -37,6 +38,8 @@ namespace Catan.Client
         public int Turn, RobberHex, DevelopmentDeckCount;
         public int? LastRoll;
         public DiceResult Dice;
+        public StartingRoll[] StartingRolls;
+        public string StartingPlayer;
         public long? DeadlineMilliseconds, ActionDeadlineMilliseconds, RollDeadlineMilliseconds;
         public Terrain[] Hexes;
         public Intersection[] Vertices;
@@ -47,6 +50,11 @@ namespace Catan.Client
         public int[] Bank;
         public Dictionary<string, int> RequiredDiscards;
         public string[] EligibleVictims;
+    }
+    [Serializable] public sealed class StartingRoll
+    {
+        public int Round, First, Second;
+        public string Player;
     }
     [Serializable] public sealed class DiceResult
     {

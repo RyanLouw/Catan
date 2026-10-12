@@ -25,7 +25,7 @@ public sealed partial class GameEngine
                 s.Discards.ToDictionary(kv => s.Players[kv.Key].Id, kv => kv.Value), s.Victims.Select(v => s.Players[v].Id).ToArray(), s.Deck.Count, s.ActionDeadline, s.RollDeadline, s.NextPhase,
                 s.FirstDie.HasValue ? new DiceRollView(s.FirstDie.Value,s.SecondDie!.Value,s.Roll!.Value,
                     s.Production.TryGetValue(owner,out var received)?(int[])received.Clone():new int[5],
-                    s.Players.Select((p,i)=>(p.Id,Count:s.Production.GetValueOrDefault(i)?.Sum()??0)).ToDictionary(p=>p.Id,p=>p.Count)) : null);
+                    s.Players.Select((p,i)=>(p.Id,Count:s.Production.GetValueOrDefault(i)?.Sum()??0)).ToDictionary(p=>p.Id,p=>p.Count)) : null, s.StartingRolls.ToArray(), s.Started?s.Players[s.Starting].Id:null);
             string? Name(int p) => p < 0 ? null : s.Players[p].Id;
         }
     }
