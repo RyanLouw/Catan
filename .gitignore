@@ -1,11 +1,39 @@
+# .NET build and test outputs
 **/bin/
 **/obj/
-TestResults/
+**/TestResults/
+*.trx
+*.coverage
+*.coveragexml
 .simulations/
-unity/**/Library/
-unity/**/Temp/
-unity/**/Logs/
-unity/**/UserSettings/
-unity/**/Builds/
-unity/**/Assets/StreamingAssets/Backend/
 **/packages.publish.lock.json
+
+# Visual Studio and local editor settings
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Unity caches, local settings, and generated builds
+unity/**/[Ll]ibrary/
+unity/**/[Tt]emp/
+unity/**/[Oo]bj/
+unity/**/[Ll]ogs/
+unity/**/[Uu]ser[Ss]ettings/
+unity/**/[Bb]uild/
+unity/**/[Bb]uilds/
+unity/**/[Mm]emoryCaptures/
+unity/**/[Rr]ecordings/
+unity/**/Assets/StreamingAssets/Backend/
+unity/**/Assets/StreamingAssets/Backend.meta
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Keep Unity source assets and their .meta files, ProjectSettings,
+# package manifests, and normal NuGet lockfiles tracked.
