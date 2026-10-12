@@ -50,6 +50,8 @@ python3 scripts/test-offline-host.py
 
 Then build the saved prototype scene using Unity's desktop build profile with the **Mono** scripting backend. The application finds the matching RID executable in StreamingAssets. No .NET SDK is required on the player's machine. Published binaries and RID-specific publication lockfiles are generated outputs and are excluded from Git. Publication uses separate lockfiles to preserve normal locked restores. Do not copy .NET 10 DLLs into Unity's script/plugin folders. Linux/macOS packaging must preserve executable permissions; use `chmod +x` on the packaged `Game.LocalHost` if the platform's copy/build step drops them. macOS signing/notarization and distributable installers are outside this prototype.
 
+GitHub Actions is manual validation only; there is no automatic deployment. Test in Unity Play mode before creating a standalone package.
+
 The first package restore and backend publication need Internet access; gameplay is offline. WebGL, mobile, IL2CPP builds, automated in-game opponents, polished artwork, and online multiplayer are outside V1. Automated complete-game simulations remain available in the existing console project.
 
 ## V2 boundary

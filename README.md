@@ -42,6 +42,10 @@ The roll-off determines who places first. `show-state` shows the active player a
 
 The host runs real timers even while waiting for terminal input: 15 seconds to roll, 30 seconds for mandatory choices, 90 seconds for actions, and 10 seconds for a disconnected player's turn. Setup decisions also receive the mandatory-choice timer. Trading does not extend the action deadline. A Knight before rolling preserves the original roll deadline; overdue rolls occur once its mandatory sequence completes. A Knight during actions preserves the original action deadline; if it expires, outstanding mandatory robber choices are completed automatically before advancing the turn.
 
+## Testing and GitHub Actions
+
+GitHub Actions is manual only on this branch. Once this workflow version is on the default branch, GitHub exposes **Actions → Stage 1 validation → Run workflow**. Until then, use the local commands below. It restores, builds, runs tests, and simulates games; it does not package or deploy the game. Local checks also test first. To additionally check the Linux offline executable after tests pass, use `CATAN_CHECK_PACKAGE=1 bash scripts/check.sh`.
+
 ## Verify
 
 ```bash
