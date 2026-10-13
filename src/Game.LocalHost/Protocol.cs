@@ -6,7 +6,7 @@ public sealed record Request(string Id, string Op, string? Viewer = null, ulong 
     string[]? Players = null, Command? Command = null, bool RelaxedTimers = false, bool Testing = false);
 public sealed record Response(string Id, bool Success, string Message, long ServerMilliseconds,
     GameView? View = null, int[]? LegalRoads = null, int[]? LegalSettlements = null, int[]? TradeRatios = null, int[]? LegalCities = null,
-    IReadOnlyDictionary<string, int[]>? Costs = null, GameTiming? Timing = null, int ProtocolVersion = 5, bool Testing = false, IReadOnlyDictionary<string,int[]>? TableResources = null);
+    IReadOnlyDictionary<string, int[]>? Costs = null, GameTiming? Timing = null, int ProtocolVersion = 6, bool Testing = false, IReadOnlyDictionary<string,int[]>? TableResources = null);
 
 /// <summary>Offline process boundary. Networking/authentication can replace this adapter without changing the engine.</summary>
 public sealed class Session(IClock? clock = null)

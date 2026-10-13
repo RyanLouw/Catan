@@ -41,6 +41,7 @@ public sealed partial class GameEngine
             var resources = new int[5];
             foreach (var h in s.Board!.Hexes.Where(h => h.Resource.HasValue && h.Vertices.Contains(vertex))) resources[(int)h.Resource!.Value]++;
             TakeBank(s, p, resources);
+            RecordResources(s,p,"Starting resources",resources,null,vertex);
         }
     }
     private static bool LegalRoad(State s, int p, int edge, bool setup)
@@ -86,6 +87,12 @@ public sealed partial class GameEngine
             for(int p=0;p<s.Players.Count;p++)s.Production[p]=Enumerable.Range(0,5).Select(r=>s.Players[p].Resources[r]-before[p][r]).ToArray();
             BeginAction(s,now);
         }
+        for(int p=0;p<s.Players.Count;p++)RecordResources(s,p,"Dice roll",s.Production.GetValueOrDefault(p)??new int[5],s.Roll,null);
+    }
+    private static void RecordResources(State s,int player,string source,int[] received,int? roll,int? vertex)
+    {
+        s.ResourceActivity.Add(new(s.NextResourceEvent++,s.Players[player].Id,source,(int[])received.Clone(),roll,vertex));
+        if(s.ResourceActivity.Count>120)s.ResourceActivity.RemoveAt(0);
     }
     internal static void Produce(State s, int roll)
     {

@@ -30,6 +30,8 @@ internal sealed class State
     public int? Roll, FirstDie, SecondDie;
     public Dictionary<int,int[]> Production = [];
     public List<StartingRollView> StartingRolls = [];
+    public List<ResourceEventView> ResourceActivity = [];
+    public long NextResourceEvent = 1;
     public int[] Bank = [19, 19, 19, 19, 19];
     public Dictionary<int, Building> Buildings = [];
     public Dictionary<int, int> Roads = [];
@@ -47,6 +49,7 @@ internal sealed class State
         Id = Id, RoomCode = RoomCode, Version = Version, Random = Random.Clone(), Board = Board,
         Players = Players.Select(p => p.Clone()).ToList(), Phase = Phase, Timing = Timing, NextPhase = NextPhase, Starting = Starting, Active = Active, Turn = Turn,
         SetupStep = SetupStep, SetupVertex = SetupVertex, Robber = Robber, Winner = Winner, Longest = Longest, Army = Army,
+        ResourceActivity = ResourceActivity.Select(e=>e with {Received=(int[])e.Received.Clone()}).ToList(), NextResourceEvent = NextResourceEvent,
         Roll = Roll, StartingRolls = [.. StartingRolls], FirstDie = FirstDie, SecondDie = SecondDie, Production = Production.ToDictionary(kv=>kv.Key,kv=>(int[])kv.Value.Clone()), Bank = (int[])Bank.Clone(), Buildings = new(Buildings), Roads = new(Roads), Deck = [.. Deck],
         Trades = Trades.Select(t => t with { Give = (int[])t.Give.Clone(), Take = (int[])t.Take.Clone() }).ToList(),
         NextTrade = NextTrade, Discards = new(Discards), Victims = [.. Victims], PlayedCard = PlayedCard, Started = Started, UsedCards = [.. UsedCards],

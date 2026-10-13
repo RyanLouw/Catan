@@ -21,7 +21,10 @@ namespace Catan.Client
         private bool busy,polling,destroyed,freeRoads,relaxedTimers=true,testing=true,chosenDice;
         private float receivedAt,nextPoll,rollAnimationEnd,rollNoticeEnd;
         private string lastDiceKey,startingRollGame;
-        private float startingRollUntil;
+        private float startingRollUntil,activityHighlightUntil;
+        private long lastResourceEvent;
+        private bool showActivity=true;
+        private Vector2 activityScroll;
         private long renderedVersion=-1,stagedVersion=-1;
         private string renderedActor,lastGame;
         private float scale;
@@ -67,11 +70,14 @@ namespace Catan.Client
             if(transport==null)throw new InvalidOperationException("Backend unavailable. Rebuild Release and restart Play mode. Check Unity Console for details.");
             var incoming=await transport.RequestAsync(request);
             if(destroyed||token!=epoch)return null;
-            if(incoming.ProtocolVersion<5)throw new InvalidOperationException("The C# backend is outdated. Stop Play mode, pull feature/unity-ui, run dotnet build Game.sln -c Release, then restart Play mode.");
+            if(incoming.ProtocolVersion<6)throw new InvalidOperationException("The C# backend is outdated. Stop Play mode, pull feature/unity-ui, run dotnet build Game.sln -c Release, then restart Play mode.");
             if(incoming.View!=null&&!preview)
             {
                 if(response!=null&&incoming.View.GameId==response.View.GameId&&request.Viewer==actor&&incoming.View.Version<response.View.Version)return incoming;
+                if(response==null||incoming.View.GameId!=response.View.GameId){lastResourceEvent=0;activityScroll=Vector2.zero;}
                 actor=request.Viewer;response=incoming;receivedAt=Time.unscaledTime;
+                var latest=incoming.View.ResourceActivity?.LastOrDefault();
+                if(latest!=null&&latest.Id>lastResourceEvent){lastResourceEvent=latest.Id;activityHighlightUntil=Time.unscaledTime+10;showActivity=true;activityScroll=Vector2.zero;}
                 if(incoming.View.Turn==0&&incoming.View.StartingRolls!=null&&incoming.View.StartingRolls.Length>0&&startingRollGame!=incoming.View.GameId){startingRollGame=incoming.View.GameId;startingRollUntil=Time.unscaledTime+6;}
                 if(incoming.View.Dice!=null)
                 {
@@ -182,6 +188,7 @@ namespace Catan.Client
                     skin.Text(new Rect(645,330,550,50),"Your turn is coming — take your time",25,skin.Ink,TextAnchor.MiddleCenter);
                     if(skin.Button(new Rect(730,400,380,52),"I’m ready — start now",!busy,true))Execute(Intent("ContinueTurn",actor));
                 }
+                if(modal=="")ResourceActivity();
                 if(response.View.Phase=="Victim"&&MyTurn&&modal=="")Victims();
                 if(response.View.Winner!=null){skin.Box(new Rect(640,310,580,160),skin.Panel);skin.Text(new Rect(660,330,540,100),response.View.Winner+" wins!",40,skin.Gold,TextAnchor.MiddleCenter);}
             }
@@ -189,6 +196,32 @@ namespace Catan.Client
             GUI.enabled=true;
             if(modal=="New")NewDialog();else if(modal=="Cards")Cards();else if(modal=="Trade"||modal=="Discard"||modal=="Plenty"||modal=="Monopoly")ResourceDialog();
             DragEvents();GUI.matrix=old;
+        }
+        private void ResourceActivity()
+        {
+            var entries=response.View.ResourceActivity;
+            if(entries==null||entries.Length==0)return;
+            bool fresh=Time.unscaledTime<activityHighlightUntil;
+            if(skin.Button(new Rect(1235,359,340,34),(fresh?"New resources • ":"")+"Activity "+(showActivity?"−":"+")))showActivity=!showActivity;
+            if(!showActivity)return;
+            skin.Box(new Rect(1235,395,340,262),skin.Panel);
+            var recent=entries.Reverse().Take(40).ToArray();
+            activityScroll=GUI.BeginScrollView(new Rect(1240,400,330,250),activityScroll,new Rect(0,0,308,recent.Length*78));
+            for(int i=0;i<recent.Length;i++)
+            {
+                var entry=recent[i];float y=i*78;
+                skin.Text(new Rect(6,y,294,25),entry.Player+" • "+(entry.Source=="Starting resources"?"Second settlement":"Rolled "+entry.Roll),15,BoardRenderer.PlayerColor(response.View,entry.Player));
+                int total=entry.Received.Sum();
+                if(total==0)skin.Text(new Rect(6,y+27,294,38),entry.Roll==7?"No production on 7":"No resources received",14,skin.Muted);
+                else
+                {
+                    float x=6;for(int r=0;r<5;r++)if(entry.Received[r]>0)
+                    {skin.Icon(new Rect(x,y+29,24,24),resources[r],ResourceColor(r));skin.Text(new Rect(x+28,y+27,28,28),"+"+entry.Received[r],15,skin.Gold);x+=60;}
+                    skin.Text(new Rect(6,y+54,294,21),entry.Source=="Starting resources"?"Starting resources added to hand":"Resources added to hand",12,skin.Muted);
+                }
+                skin.Box(new Rect(6,y+74,294,1),skin.Muted*.45f);
+            }
+            GUI.EndScrollView();
         }
         private void StartingDice()
         {
@@ -223,7 +256,7 @@ namespace Catan.Client
         private void Header()
         {
             skin.Text(new Rect(26,20,230,60),"CATAN",34,skin.Gold);
-            skin.Text(new Rect(27,76,220,23),"V2 • UI build 0.6",14,skin.Muted);
+            skin.Text(new Rect(27,76,220,23),"V2 • UI build 0.7",14,skin.Muted);
             if(response==null){skin.Text(new Rect(300,22,800,60),"Local hot-seat • Unity desktop",24);return;}
             var v=response.View;
             skin.Text(new Rect(300,18,790,35),(v.Turn==0?"INITIAL SETUP":"TURN "+v.Turn)+"   /   "+(v.ActivePlayer??"Lobby"),25,BoardRenderer.PlayerColor(v,v.ActivePlayer));

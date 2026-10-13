@@ -37,7 +37,7 @@ public sealed class UnityTransportTests
         var state=await transport.RequestAsync(new HostRequest{Op="create",Viewer="Ryan",Players=["Ryan","John"],Seed=42,RelaxedTimers=true});
         foreach(string p in new[]{"Ryan","John"})state=await transport.RequestAsync(new HostRequest{Op="command",Viewer=p,Command=new Intent{Kind="Ready",Player=p,Target=1}});
         state=await transport.RequestAsync(new HostRequest{Op="command",Viewer="Ryan",Command=new Intent{Kind="Start",Player="Ryan"}});
-        Assert.Equal(5,state.ProtocolVersion);Assert.NotEmpty(state.View.StartingRolls);
+        Assert.Equal(6,state.ProtocolVersion);Assert.NotEmpty(state.View.StartingRolls);
         while(state.View.Turn==0)
         {
             string p=state.View.ActivePlayer;
@@ -52,9 +52,11 @@ public sealed class UnityTransportTests
         {
             Assert.Equal(2,state.View.Edges.Count(e=>e.Owner==p));Assert.Equal(2,state.View.Vertices.Count(v=>v.Owner==p));
         }
+        Assert.Equal(2,state.View.ResourceActivity.Length);Assert.All(state.View.ResourceActivity,e=>Assert.Equal("Starting resources",e.Source));
         string active=state.View.ActivePlayer;
         state=await transport.RequestAsync(new HostRequest{Op="command",Viewer=active,Command=new Intent{Kind="ContinueTurn",Player=active}});Assert.True(state.Success);
         state=await transport.RequestAsync(new HostRequest{Op="command",Viewer=active,Command=new Intent{Kind="Roll",Player=active}});Assert.True(state.Success);
+        Assert.Equal(4,state.View.ResourceActivity.Length);Assert.Equal(2,state.View.ResourceActivity.Count(e=>e.Source=="Dice roll"));
         Assert.NotNull(state.View.Dice);Assert.Equal(state.View.LastRoll,state.View.Dice.First+state.View.Dice.Second);Assert.Equal(5,state.View.Dice.ResourcesReceived.Length);
     }
     private static string Repository()

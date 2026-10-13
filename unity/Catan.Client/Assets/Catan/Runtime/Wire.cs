@@ -41,6 +41,7 @@ namespace Catan.Client
         public int? LastRoll;
         public DiceResult Dice;
         public StartingRoll[] StartingRolls;
+        public ResourceEvent[] ResourceActivity;
         public string StartingPlayer;
         public long? DeadlineMilliseconds, ActionDeadlineMilliseconds, RollDeadlineMilliseconds;
         public Terrain[] Hexes;
@@ -52,6 +53,13 @@ namespace Catan.Client
         public int[] Bank;
         public Dictionary<string, int> RequiredDiscards;
         public string[] EligibleVictims;
+    }
+    [Serializable] public sealed class ResourceEvent
+    {
+        public long Id;
+        public string Player, Source;
+        public int[] Received;
+        public int? Roll, Vertex;
     }
     [Serializable] public sealed class StartingRoll
     {

@@ -18,6 +18,7 @@ public sealed record PlayerView(string Id, bool Ready, bool Connected, bool Surr
     int DevelopmentCardCount, int PublicPoints, int Knights, int RoadLength,
     IReadOnlyList<int>? Resources, IReadOnlyList<Card>? Cards, int? TotalPoints);
 public sealed record TradeView(int Id, string From, string? To, IReadOnlyList<int> Give, IReadOnlyList<int> Take);
+public sealed record ResourceEventView(long Id, string Player, string Source, int[] Received, int? Roll, int? Vertex);
 public sealed record StartingRollView(int Round, string Player, int First, int Second);
 public sealed record DiceRollView(int First, int Second, int Total, IReadOnlyList<int> ResourcesReceived, IReadOnlyDictionary<string,int> PlayerResourceCounts);
 public sealed record GameView(Guid GameId, string RoomCode, long Version, Phase Phase, string Host, string? ActivePlayer,
@@ -25,4 +26,4 @@ public sealed record GameView(Guid GameId, string RoomCode, long Version, Phase 
     string? LargestArmy, IReadOnlyList<HexView> Hexes, IReadOnlyList<VertexView> Vertices,
     IReadOnlyList<EdgeView> Edges, IReadOnlyList<PortView> Ports, IReadOnlyList<int> Bank,
     IReadOnlyList<PlayerView> Players, IReadOnlyList<TradeView> Trades,
-    IReadOnlyDictionary<string, int> RequiredDiscards, IReadOnlyList<string> EligibleVictims, int DevelopmentDeckCount, long? ActionDeadlineMilliseconds, long? RollDeadlineMilliseconds, Phase? NextPhase, DiceRollView? Dice, IReadOnlyList<StartingRollView> StartingRolls, string? StartingPlayer);
+    IReadOnlyDictionary<string, int> RequiredDiscards, IReadOnlyList<string> EligibleVictims, int DevelopmentDeckCount, long? ActionDeadlineMilliseconds, long? RollDeadlineMilliseconds, Phase? NextPhase, DiceRollView? Dice, IReadOnlyList<StartingRollView> StartingRolls, string? StartingPlayer, IReadOnlyList<ResourceEventView> ResourceActivity);
