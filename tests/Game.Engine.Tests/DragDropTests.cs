@@ -8,7 +8,7 @@ namespace Game.Engine.Tests;
 
 public sealed class DragDropTests
 {
-    private static HostResponse UI(string phase="Action")=>new(){LegalRoads=[7],LegalSettlements=[8],LegalCities=[9],View=new Snapshot{Phase=phase,ActivePlayer="Ryan",RobberHex=0,Hexes=[new Terrain{Id=0},new Terrain{Id=1}]}};
+    private static HostResponse UI(string phase="Action")=>new(){Costs=new(){{"Road",[1,1,0,0,0]},{"Settlement",[1,1,1,1,0]},{"City",[0,0,0,2,3]}},LegalRoads=[7],LegalSettlements=[8],LegalCities=[9],View=new Snapshot{Players=[new Participant{Id="Ryan",Resources=[5,5,5,5,5]}],Phase=phase,ActivePlayer="Ryan",RobberHex=0,Hexes=[new Terrain{Id=0},new Terrain{Id=1}]}};
     [Theory]
     [InlineData("SetupSettlement","Settlement",8,"PlaceSettlement")]
     [InlineData("SetupRoad","Road",7,"PlaceRoad")]

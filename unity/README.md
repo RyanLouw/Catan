@@ -33,7 +33,7 @@ Rolling 7 opens a discard picker for each affected player. After discards, drag 
 
 Use **Development cards** to play a held card. Knight prompts robber movement; Year of Plenty and Monopoly have resource pickers. Road Building lets you stage the first free road, highlights the legal second positions through a read-only engine preview, then commits both atomically after the second drop. If no second road is possible, the engine accepts the permitted single road. Cancel before committing to retain the card. Victory-point cards remain passive. New-card and one-card-per-turn restrictions are enforced by the engine.
 
-The corner label reads **UI build 0.7**. An outdated host is rejected with a rebuild instruction instead of silently omitting new dice data. If startup fails, the error appears in the new-game panel and Unity Console. Rebuild Release before Play mode; the Editor always starts that build rather than a potentially stale published executable. The launcher automatically checks the standard Windows .NET installation when Unity Hub lacks a `dotnet` PATH entry. You can still set **Dotnet Executable** and **Repository Root** in the Inspector.
+The corner label reads **UI build 0.8**. An outdated host is rejected with a rebuild instruction instead of silently omitting new dice data. If startup fails, the error appears in the new-game panel and Unity Console. Rebuild Release before Play mode; the Editor always starts that build rather than a potentially stale published executable. The launcher automatically checks the standard Windows .NET installation when Unity Hub lacks a `dotnet` PATH entry. You can still set **Dotnet Executable** and **Repository Root** in the Inspector.
 
 ## Standalone desktop packaging
 
@@ -66,7 +66,7 @@ For future online multiplayer, implement an authenticated network transport and 
 
 ## Validation status
 
-The .NET build, 106 automated tests, shared Unity wire DTOs/process transport against the actual host, and published Linux x64 executable are exercised in the cloud environment. The self-contained publication test runs without dotnet on PATH. `scripts/check.sh` also runs the existing 1,000 complete seeded games.
+The .NET build, 112 automated tests, shared Unity wire DTOs/process transport against the actual host, and published Linux x64 executable are exercised in the cloud environment. The self-contained publication test runs without dotnet on PATH. `scripts/check.sh` also runs the existing 1,000 complete seeded games.
 
 Unity Editor is not installed in the cloud machine. Editor import, shader/scene rendering, mouse picking, Play mode, and standalone Unity builds have not been executed here; verify these with steps 4–10 on your machine. Other operating systems' self-contained publications are documented but untested. The original all-inactive rule proposal remains pending in `docs/DECISIONS.md`.
 
@@ -90,10 +90,16 @@ After both initial settlements and roads are placed, select the active player an
 
 ### Board and icon presentation
 
-UI build 0.7 adds outlined, shaded icons for resources, roads, settlements, cities, dice, the robber and trade. The board uses terrain colours and small trees, sheep, field rows, clay bricks and ore rocks. Number tokens show probability dots; six and eight use red text. Ports have paired wooden piers, a resource/trade icon, a 2:1 or 3:1 badge and a player-colour ownership marker. The camera fits the surrounding coast and ports. Board materials use simple directional shading without requiring scene lights. These runtime visuals require Unity Play mode review on the user's machine.
+UI build 0.8 adds outlined, shaded icons for resources, roads, settlements, cities, dice, the robber and trade. The board uses terrain colours and small trees, sheep, field rows, clay bricks and ore rocks. Number tokens show probability dots; six and eight use red text. Ports have paired wooden piers, a resource/trade icon, a 2:1 or 3:1 badge and a player-colour ownership marker. The camera fits the surrounding coast and ports. Board materials use simple directional shading without requiring scene lights. These runtime visuals require Unity Play mode review on the user's machine.
 
 ### Visible resource activity
 
 The **Activity** panel opens automatically when starting resources or dice production are awarded. It displays each player's resource icons and quantities, including opponents, and explicitly reports rolls that give a player nothing. Scroll to review previous receipts or collapse the panel to see more of the board. Switching the selected hand does not clear the history. The engine retains the latest 120 receipts and the panel displays the latest 40.
 
 Classic setup awards one resource from each adjacent non-desert hex when the **second settlement** is placed, regardless of the hex number. The feed labels this **Second settlement / Starting resources added to hand** and keeps it visible after initial roads are finished. First settlements award no starting cards. Ordinary dice production still respects matching numbers, cities, the robber and bank shortages; seven produces no cards. The public receipts show newly produced cards while other players' full hands and development cards remain private outside Testing mode. Rebuild the backend after pulling this update; the UI requires protocol version 6.
+
+### Building costs and reviewing player trades
+
+Building icons stay visible in player colours. Required costs appear below each piece, and **Need …** lists the exact cards missing from the selected hand. Paid placement cannot start without those resources; the backend rechecks the payment on submission. Initial placement and Road Building card roads remain free. Development-card purchases also show missing resources.
+
+Player trading is available during the active player's Action phase, after rolling. Select give/receive quantities and choose a partner or Anyone. Submit **Offer to …**; the dialog stays open. Use **Review as** to switch to the recipient's hand inside the dialog without ending the offering player's turn, then click **Accept**. Acceptance lists any missing cards and remains disabled until the recipient has them. Switch back with Review as to continue the active player's turn. Offers expire when that turn ends; the timer continues during review. Bank/port trading uses the separate Bank / port trade button.

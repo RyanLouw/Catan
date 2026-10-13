@@ -115,10 +115,10 @@ namespace Catan.Client
             catch(Exception e){status=e.Message;}
             finally{busy=false;}
         }
-        private async void SelectActor(string name)
+        private async void SelectActor(string name,bool reviewTrade=false)
         {
             if(busy)return;busy=true;int token=++epoch;dragging=null;CancelFreeRoads();
-            try{modal="";ResetBundles();await Send(new HostRequest{Op="view",Viewer=name},token,false);}
+            try{modal="";ResetBundles();await Send(new HostRequest{Op="view",Viewer=name},token,false);if(reviewTrade)modal="Trade";}
             catch(Exception e){status=e.Message;}
             finally{busy=false;}
         }
@@ -126,7 +126,7 @@ namespace Catan.Client
         private async void Execute(Intent intent,bool close=true)
         {
             if(busy)return;busy=true;int token=++epoch;
-            try{var result=await Send(new HostRequest{Op="command",Viewer=actor,Command=intent},token);if(result!=null&&result.Success&&close)modal="";}
+            try{var result=await Send(new HostRequest{Op="command",Viewer=actor,Command=intent},token);if(result!=null&&result.Success){if(close)modal="";if(intent.Kind=="OfferTrade")status="Offer sent. Choose Review as the other player, then Accept. Keep the current turn open.";}}
             catch(Exception e){status=e.Message;}
             finally{busy=false;}
         }
@@ -192,7 +192,7 @@ namespace Catan.Client
                 if(response.View.Phase=="Victim"&&MyTurn&&modal=="")Victims();
                 if(response.View.Winner!=null){skin.Box(new Rect(640,310,580,160),skin.Panel);skin.Text(new Rect(660,330,540,100),response.View.Winner+" wins!",40,skin.Gold,TextAnchor.MiddleCenter);}
             }
-            skin.Text(new Rect(285,861,1285,33),status,18,skin.Muted);
+            skin.Text(new Rect(285,876,1285,24),status,18,skin.Muted);
             GUI.enabled=true;
             if(modal=="New")NewDialog();else if(modal=="Cards")Cards();else if(modal=="Trade"||modal=="Discard"||modal=="Plenty"||modal=="Monopoly")ResourceDialog();
             DragEvents();GUI.matrix=old;
@@ -256,7 +256,7 @@ namespace Catan.Client
         private void Header()
         {
             skin.Text(new Rect(26,20,230,60),"CATAN",34,skin.Gold);
-            skin.Text(new Rect(27,76,220,23),"V2 • UI build 0.7",14,skin.Muted);
+            skin.Text(new Rect(27,76,220,23),"V2 • UI build 0.8",14,skin.Muted);
             if(response==null){skin.Text(new Rect(300,22,800,60),"Local hot-seat • Unity desktop",24);return;}
             var v=response.View;
             skin.Text(new Rect(300,18,790,35),(v.Turn==0?"INITIAL SETUP":"TURN "+v.Turn)+"   /   "+(v.ActivePlayer??"Lobby"),25,BoardRenderer.PlayerColor(v,v.ActivePlayer));
@@ -319,19 +319,30 @@ namespace Catan.Client
                 int used=piece=="Road"?response.View.Edges.Count(e=>e.Owner==actor):response.View.Vertices.Count(v=>v.Owner==actor&&v.Level==(piece=="City"?2:1));
                 int left=piece=="Road"?15-used:piece=="City"?4-used:5-used;
                 bool enabled=!busy&&MyTurn&&(piece=="Robber"?response.View.Phase=="Robber":piece=="Road"?response.View.Phase=="SetupRoad"||response.View.Phase=="Action"||freeRoads:piece=="Settlement"?response.View.Phase=="SetupSettlement"||response.View.Phase=="Action":response.View.Phase=="Action");
-                skin.Box(rect,enabled?new Color(.18f,.30f,.32f):skin.Panel);skin.Icon(new Rect(x+10,804,42,42),piece,enabled?BoardRenderer.PlayerColor(response.View,actor):skin.Muted);
-                skin.Text(new Rect(x+60,801,150,30),piece+(piece=="Robber"?"":" ×"+left),18,enabled?skin.Ink:skin.Muted);
-                if(piece!="Robber"&&response.View.Phase=="Action")CostIcons(x+60,833,piece);
+                bool affordable=piece=="Robber"||response.View.Phase!="Action"||(piece=="Road"&&freeRoads)||ClientActions.CanAfford(response,actor,piece);
+                enabled=enabled&&affordable&&(piece=="Robber"||left>0);
+                skin.Box(rect,enabled?new Color(.18f,.30f,.32f):skin.Panel);skin.Icon(new Rect(x+10,804,42,42),piece,BoardRenderer.PlayerColor(response.View,actor));
+                skin.Text(new Rect(x+60,801,150,30),piece+(piece=="Robber"?"":" ×"+left),18,skin.Ink);
+                if(piece!="Robber"&&response.View.Turn>0)
+                {
+                    CostIcons(x+60,829,piece);
+                    var missing=ClientActions.Missing(response,actor,piece);
+                    skin.Text(new Rect(x,847,225,18),piece=="Road"&&freeRoads?"Free road card":missing==null?"Costs unavailable":missing.Sum()>0?"Need "+BundleText(missing):left==0?"No pieces left":"Resources ready",12,missing!=null&&missing.Sum()>0?skin.Gold:skin.Muted);
+                }
                 if(enabled&&modal==""&&Event.current.type==EventType.MouseDown&&Event.current.button==0&&rect.Contains(mouse))
                 {dragging=piece;board.Focus(piece,freeRoads?secondRoads:null,firstRoad);Event.current.Use();}
             }
             if(freeRoads){skin.Text(new Rect(995,798,370,50),firstRoad<0?"Drag two free roads":"Drag your second free road",18,skin.Gold);if(skin.Button(new Rect(995,843,200,30),"Cancel free roads",!busy)){CancelFreeRoads();}}
-            else if(response.View.Phase=="Action"&&skin.Button(new Rect(995,800,380,52),"Buy development card",!busy&&MyTurn))Execute(Intent("BuyCard",actor));
+            else if(response.View.Phase=="Action")
+            {
+                if(skin.Button(new Rect(995,800,380,40),"Buy development card",!busy&&MyTurn&&ClientActions.CanAfford(response,actor,"Development")))Execute(Intent("BuyCard",actor));
+                var missing=ClientActions.Missing(response,actor,"Development");skin.Text(new Rect(995,841,380,20),missing!=null&&missing.Sum()>0?"Need "+BundleText(missing):"Resources ready",13,skin.Gold);
+            }
         }
         private void CostIcons(float x,float y,string piece)
         {
             if(response.Costs==null||!response.Costs.TryGetValue(piece,out var cost))return;
-            for(int r=0;r<5;r++)if(cost[r]>0){skin.Icon(new Rect(x,y,14,14),resources[r],ResourceColor(r));skin.Text(new Rect(x+15,y-2,15,18),cost[r].ToString(),12,skin.Muted);x+=31;}
+            for(int r=0;r<5;r++)if(cost[r]>0){skin.Icon(new Rect(x,y,14,14),resources[r],ResourceColor(r));skin.Text(new Rect(x+15,y-2,15,18),cost[r].ToString(),12,Me.Resources[r]<cost[r]?skin.Gold:skin.Muted);x+=31;}
         }
         private void DragEvents()
         {
@@ -372,7 +383,8 @@ namespace Catan.Client
         {
             bool trade=modal=="Trade",discard=modal=="Discard",monopoly=modal=="Monopoly";
             Overlay(new Rect(470,140,910,655),discard?"Discard "+response.View.RequiredDiscards[actor]+" resources":trade?"Trade resources":monopoly?"Choose a resource":"Choose your two resources");
-            skin.Text(new Rect(510,210,820,34),"Timer keeps running while you choose.",17,skin.Muted);
+            skin.Text(new Rect(510,210,315,34),trade?"Viewing "+actor+" • Review as:":"Timer keeps running while you choose.",16,skin.Muted);
+            if(trade){float seatX=830;foreach(var p in response.View.Players.Where(p=>p.Id!=actor)){if(skin.Button(new Rect(seatX,210,158,34),p.Id,!busy))SelectActor(p.Id,true);seatX+=165;}}
             if(trade)
             {
                 skin.Text(new Rect(510,260,130,35),"Partner",18);float x=650;
@@ -394,12 +406,18 @@ namespace Catan.Client
                 if(skin.Button(new Rect(515,660,260,50),"Bank / port trade",!busy&&MyTurn,true))Trade("BankTrade");
                 if(skin.Button(new Rect(790,660,260,50),"Offer to "+(string.IsNullOrEmpty(partner)?"anyone":partner),!busy&&MyTurn))Trade("OfferTrade");
                 var available=response.View.Trades.Where(t=>t.To==actor||t.From==actor||t.To==null).ToArray();
-                tradeScroll=GUI.BeginScrollView(new Rect(510,718,820,75),tradeScroll,new Rect(0,0,800,Math.Max(75,available.Length*45)));
+                tradeScroll=GUI.BeginScrollView(new Rect(510,718,820,75),tradeScroll,new Rect(0,0,800,Math.Max(75,available.Length*70)));
                 int row=0;foreach(var offer in available)
                 {
-                    float y=row*45;skin.Text(new Rect(0,y,500,36),offer.From+" gives "+BundleText(offer.Give)+" for "+BundleText(offer.Take),14);
-                    if(offer.From!=actor&&(offer.To==actor||offer.To==null)&&skin.Button(new Rect(510,y,135,35),"Accept",!busy)){Execute(Intent("AcceptTrade",actor,offer.Id));}
-                    if((offer.From==actor||offer.To==actor)&&skin.Button(new Rect(655,y,135,35),"Cancel offer",!busy))Execute(Intent("CancelTrade",actor,offer.Id));row++;
+                    float y=row*70;skin.Text(new Rect(0,y,500,36),offer.From+" gives "+BundleText(offer.Give)+" for "+BundleText(offer.Take),14);
+                    if(offer.From!=actor&&(offer.To==actor||offer.To==null)&&skin.Button(new Rect(510,y,135,35),ClientActions.CanAccept(response,actor,offer)?"Accept":"Need cards",!busy&&ClientActions.CanAccept(response,actor,offer))){Execute(Intent("AcceptTrade",actor,offer.Id));}
+                    if((offer.From==actor||offer.To==actor)&&skin.Button(new Rect(655,y,135,35),"Cancel offer",!busy))Execute(Intent("CancelTrade",actor,offer.Id));
+                    if(offer.From!=actor&&(offer.To==actor||offer.To==null))
+                    {
+                        var missing=offer.Take.Select((n,i)=>Math.Max(0,n-Me.Resources[i])).ToArray();
+                        skin.Text(new Rect(0,y+37,790,27),missing.Sum()>0?"You need "+BundleText(missing)+" to accept":"You can accept this exchange during "+response.View.ActivePlayer+"’s turn.",13,missing.Sum()>0?skin.Gold:skin.Muted);
+                    }
+                    row++;
                 }
                 GUI.EndScrollView();
             }
@@ -412,7 +430,7 @@ namespace Catan.Client
             skin.Text(new Rect(x+50,y,58,40),values[i].ToString(),23,skin.Ink,TextAnchor.MiddleCenter);
             if(skin.Button(new Rect(x+115,y,45,40),"+",!busy&&values[i]<limit))values[i]++;
         }
-        private void Trade(string kind){var cmd=Intent(kind,actor);cmd.OtherPlayer=string.IsNullOrEmpty(partner)?null:partner;cmd.Give=(int[])give.Clone();cmd.Take=(int[])take.Clone();Execute(cmd);}
+        private void Trade(string kind){var cmd=Intent(kind,actor);cmd.OtherPlayer=string.IsNullOrEmpty(partner)?null:partner;cmd.Give=(int[])give.Clone();cmd.Take=(int[])take.Clone();Execute(cmd,kind!="OfferTrade");}
         private string BundleText(int[] bundle)=>string.Join(", ",resources.Where((r,i)=>bundle[i]>0).Select(r=>bundle[Array.IndexOf(resources,r)]+" "+r));
         private void Cards()
         {

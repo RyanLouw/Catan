@@ -10,12 +10,28 @@ namespace Catan.Client
         {
             if (response == null || response.View == null || response.View.ActivePlayer != actor) return null;
             var phase = response.View.Phase; string kind;
+            if(phase=="Action"&&piece!="Robber"&&!CanAfford(response,actor,piece))return null;
             if (piece == "Road" && (phase == "SetupRoad" || phase == "Action") && Contains(response.LegalRoads,id)) kind = phase == "SetupRoad" ? "PlaceRoad" : "BuildRoad";
             else if (piece == "Settlement" && (phase == "SetupSettlement" || phase == "Action") && Contains(response.LegalSettlements,id)) kind = phase == "SetupSettlement" ? "PlaceSettlement" : "BuildSettlement";
             else if (piece == "City" && phase == "Action" && Contains(response.LegalCities,id)) kind = "BuildCity";
             else if (piece == "Robber" && phase == "Robber" && id != response.View.RobberHex && response.View.Hexes.Any(h => h.Id == id)) kind = "MoveRobber";
             else return null;
             return new Intent { Kind = kind, Player = actor, Target = id, RequestId = Guid.NewGuid().ToString("N") };
+        }
+        public static int[] Missing(HostResponse response,string actor,string piece)
+        {
+            var hand=response?.View?.Players?.FirstOrDefault(p=>p.Id==actor)?.Resources;
+            if(hand==null||response.Costs==null||!response.Costs.TryGetValue(piece,out var cost))return null;
+            return cost.Select((n,i)=>Math.Max(0,n-hand[i])).ToArray();
+        }
+        public static bool CanAfford(HostResponse response,string actor,string piece)
+        {
+            var missing=Missing(response,actor,piece);return missing!=null&&missing.All(n=>n==0);
+        }
+        public static bool CanAccept(HostResponse response,string actor,Offer offer)
+        {
+            var hand=response?.View?.Players?.FirstOrDefault(p=>p.Id==actor)?.Resources;
+            return response?.View?.Phase=="Action"&&offer.From==response.View.ActivePlayer&&offer.From!=actor&&(offer.To==null||offer.To==actor)&&hand!=null&&offer.Take.Select((n,i)=>n<=hand[i]).All(x=>x);
         }
         public static bool Contains(int[] ids, int id) => ids != null && Array.IndexOf(ids,id) >= 0;
         public static double Remaining(HostResponse response, double elapsedSeconds)
