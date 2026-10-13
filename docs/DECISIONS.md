@@ -17,3 +17,11 @@ Mandatory setup choices use the 30-second mandatory-action timer. Roll-7 discard
 Playing a Knight before the roll does not reset the original 15-second roll deadline. The engine resolves the Knight's mandatory sequence first and immediately performs an overdue roll afterwards. A Knight during the action phase does not reset its 90-second deadline; at expiration the engine supplies any outstanding mandatory robber/victim choices before ending the turn.
 
 Disconnecting mid-turn does not reset existing deadlines. Only reaching a disconnected player's new turn starts the 10-second reconnection grace. Surrender during a mandatory roll-7 sequence completes the outstanding effects, then skips immediately; pieces remain on the board and continue blocking road traversal and placement.
+
+## Offline testing pace
+
+The user requested both longer turns and a handover break for Unity testing. The Unity create-game screen now enables the relaxed profile by default: 30-second handover, 60-second roll/mandatory choices, and 180-second action phase. Handover can be acknowledged early by the next player and does not consume their roll/placement timer. The original GAME_RULES.md timings remain the standard engine/console profile; the relaxed profile is an explicit offline testing option rather than a silent change to the locked rules.
+
+## Settlement distance confirmed
+
+The user confirmed keeping classic Catan’s settlement-distance rule: neighbouring settlements are prohibited even when both belong to the same player. Initial roads attach to the newly placed settlement; after setup, roads may extend the player’s connected network subject to opponent-building interruptions.

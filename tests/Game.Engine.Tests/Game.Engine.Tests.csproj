@@ -1,9 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5"><PrivateAssets>all</PrivateAssets></PackageReference>
     <ProjectReference Include="../../src/Game.Engine/Game.Engine.csproj" />
+    <ProjectReference Include="../../src/Game.LocalHost/Game.LocalHost.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../unity/Catan.Client/Assets/Catan/Runtime/ClientActions.cs" Link="UnityClient/ClientActions.cs" />
+    <Compile Include="../../unity/Catan.Client/Assets/Catan/Runtime/Wire.cs" Link="UnityClient/Wire.cs" />
+    <Compile Include="../../unity/Catan.Client/Assets/Catan/Runtime/LocalProcessTransport.cs" Link="UnityClient/LocalProcessTransport.cs" />
   </ItemGroup>
 </Project>

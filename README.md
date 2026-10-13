@@ -2,6 +2,10 @@
 
 A terminal-playable, authoritative implementation of classic base-game Catan for 2–4 players. Original source; no Unity, networking, database, or hosting dependencies. [GAME_RULES.md](GAME_RULES.md) is the supplied gameplay specification.
 
+## Unity offline prototype
+
+The `feature/unity-ui` branch adds a Unity 6 LTS desktop hot-seat UI and a local C# engine host. See [Unity setup and play instructions](unity/README.md). The desktop UI uses a local process; a future online version can replace the transport with an authenticated connection.
+
 ## Run
 
 Requires the pinned .NET 10 SDK on Linux x64. Cloud setup installs it locally and verifies its archive against Microsoft's SHA-512 release metadata:
@@ -38,6 +42,10 @@ The roll-off determines who places first. `show-state` shows the active player a
 
 The host runs real timers even while waiting for terminal input: 15 seconds to roll, 30 seconds for mandatory choices, 90 seconds for actions, and 10 seconds for a disconnected player's turn. Setup decisions also receive the mandatory-choice timer. Trading does not extend the action deadline. A Knight before rolling preserves the original roll deadline; overdue rolls occur once its mandatory sequence completes. A Knight during actions preserves the original action deadline; if it expires, outstanding mandatory robber choices are completed automatically before advancing the turn.
 
+## Testing and GitHub Actions
+
+GitHub Actions is manual only on this branch. Once this workflow version is on the default branch, GitHub exposes **Actions → Stage 1 validation → Run workflow**. Until then, use the local commands below. It restores, builds, runs tests, and simulates games; it does not package or deploy the game. Local checks also test first. To additionally check the Linux offline executable after tests pass, use `CATAN_CHECK_PACKAGE=1 bash scripts/check.sh`.
+
 ## Verify
 
 ```bash
@@ -54,6 +62,7 @@ Simulations cycle through 2, 3, and 4 players unless a player count is supplied.
 
 - `Game.Contracts`: intent commands and detached per-player snapshots.
 - `Game.Engine`: board generation, seeded randomness, lobby, roll-off, placement, production, robber, building, trading, development cards, graph scoring, victory, timers, reconnection, surrender, command receipts, and headless simulation driver.
+- `Game.LocalHost`: offline JSON process adapter around the engine; no network listener.
 - `Game.Console`: parsing, presentation, actor selection, and the authoritative timer host. It contains no gameplay rules.
 - `Game.Engine.Tests`: deterministic gameplay, rejection, boundary, privacy, graph, timer, isolation, concurrency, and complete-game tests.
 

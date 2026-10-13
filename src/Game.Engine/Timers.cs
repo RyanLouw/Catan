@@ -31,10 +31,11 @@ public sealed partial class GameEngine
                 var vertices = Enumerable.Range(0, s.Board!.VertexEdges.Length).Where(v => LegalSettlement(s, s.Active, v, true)).ToArray();
                 Require(vertices.Length > 0, "No initial settlement placement remains.");
                 int vertex = vertices[s.Random.Next(vertices.Length)]; PlaceSettlement(s, s.Active, vertex, true); s.SetupVertex = vertex;
-                s.Phase = Phase.SetupRoad; s.Deadline = now + 30_000; break;
+                s.Phase = Phase.SetupRoad; s.Deadline = now + s.Timing.MandatoryMilliseconds; break;
             case Phase.SetupRoad:
                 var edges = Enumerable.Range(0, s.Board!.Edges.Length).Where(e => LegalRoad(s, s.Active, e, true)).ToArray();
                 Require(edges.Length > 0, "No initial road placement remains."); PlaceRoad(s, s.Active, edges[s.Random.Next(edges.Length)], true); NextSetup(s, now); break;
+            case Phase.Handover: ResumeHandover(s,now); break;
             case Phase.ReconnectGrace: NextTurn(s, now); break;
             case Phase.AwaitRoll: ResolveRoll(s, now); break;
             case Phase.Discard:
@@ -76,6 +77,7 @@ public sealed partial class GameEngine
             s.Discards.Remove(p); if (s.Discards.Count == 0) BeginRobber(s, now);
         }
         if (p != s.Active) return;
+        if(s.Phase==Phase.Handover)ResumeHandover(s,now);
         if (s.Phase == Phase.SetupSettlement) { NextSetup(s, now); return; }
         if (s.Phase == Phase.SetupRoad) { Auto(s, now); return; }
         // Finish mandatory roll effects before skipping the surrendered player's turn.

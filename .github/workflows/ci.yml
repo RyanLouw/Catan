@@ -1,5 +1,5 @@
 name: Stage 1 validation
-on: [push, pull_request]
+on: workflow_dispatch
 permissions:
   contents: read
 jobs:
@@ -12,6 +12,7 @@ jobs:
           global-json-file: global.json
           cache: true
           cache-dependency-path: '**/packages.lock.json'
+      - run: python3 scripts/test-dotnet-env.py
       - run: dotnet restore Game.sln --locked-mode
       - run: dotnet build Game.sln -c Release --no-restore
       - run: dotnet test Game.sln -c Release --no-build --no-restore

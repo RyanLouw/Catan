@@ -7,12 +7,15 @@ public sealed partial class GameEngine
 {
     private readonly object gate = new();
     private readonly IClock clock;
+    private readonly bool testing;
     private State state;
     private readonly Dictionary<(string Player, string Id), (string Payload, Result Result)> receipts = [];
-    public GameEngine(ulong seed, IClock? clock = null)
+    public GameEngine(ulong seed, IClock? clock = null, GameTiming? timing = null, bool testing = false)
     {
         this.clock = clock ?? new SystemClock();
-        state = new State { Random = new RandomSource(seed) };
+        this.testing = testing;
+        var profile=timing??GameTiming.Standard; profile.Validate();
+        state = new State { Random = new RandomSource(seed), Timing = profile };
         // Unique identity independent of gameplay RNG. Online room-code allocation must check collisions.
         state.RoomCode = state.Id.ToString("N")[..8].ToUpperInvariant();
     }
@@ -46,7 +49,7 @@ public sealed partial class GameEngine
     {
         Require(p == s.Active, "It is not your turn."); Require(phases.Contains(s.Phase), "Action is not legal in this phase.");
     }
-    private static void Apply(State s, Command c, long now)
+    private void Apply(State s, Command c, long now)
     {
         Require(!string.IsNullOrWhiteSpace(c.Player) && c.Player.Length <= 64, "Player ID must contain 1–64 characters.");
         Require(s.Phase is not (Phase.Finished or Phase.Abandoned), "Game is complete.");
@@ -68,6 +71,8 @@ public sealed partial class GameEngine
         if (c.Kind == CommandKind.Surrender) { Surrender(s, p, now); return; }
         switch (c.Kind)
         {
+            case CommandKind.ContinueTurn:
+                Current(s,p,Phase.Handover); ResumeHandover(s,now); break;
             case CommandKind.Ready:
                 Require(s.Phase == Phase.Lobby, "Ready state is lobby-only."); player.Ready = c.Target != 0; break;
             case CommandKind.Start:
@@ -76,11 +81,14 @@ public sealed partial class GameEngine
                 Start(s, now); break;
             case CommandKind.PlaceSettlement:
                 Current(s, p, Phase.SetupSettlement); PlaceSettlement(s, p, c.Target, true); s.SetupVertex = c.Target;
-                s.Phase = Phase.SetupRoad; s.Deadline = now + 30_000; break;
+                s.Phase = Phase.SetupRoad; s.Deadline = now + s.Timing.MandatoryMilliseconds; break;
             case CommandKind.PlaceRoad:
                 Current(s, p, Phase.SetupRoad); PlaceRoad(s, p, c.Target, true); NextSetup(s, now); break;
             case CommandKind.Roll:
-                Current(s, p, Phase.AwaitRoll); ResolveRoll(s, now); break;
+                Current(s, p, Phase.AwaitRoll);
+                if(c.FirstDie.HasValue || c.SecondDie.HasValue)
+                    Require(testing && c.FirstDie is >= 1 and <= 6 && c.SecondDie is >= 1 and <= 6, "Chosen dice require testing mode and two values from 1 to 6.");
+                ResolveRoll(s, now, c.FirstDie, c.SecondDie); break;
             case CommandKind.BuildRoad:
                 Current(s, p, Phase.Action); Pay(s, p, Costs.Road); PlaceRoad(s, p, c.Target, false); break;
             case CommandKind.BuildSettlement:
@@ -94,7 +102,7 @@ public sealed partial class GameEngine
                 player.Cards.Add(new(s.Deck[^1].Kind, s.Turn)); s.Deck.RemoveAt(s.Deck.Count - 1); break;
             case CommandKind.PlayKnight:
                 Current(s, p, Phase.AwaitRoll, Phase.Action); Play(s, p, Card.Knight); player.Knights++;
-                s.RobberReturn = s.Phase; s.Phase = Phase.Robber; s.Deadline = now + 30_000; break;
+                s.RobberReturn = s.Phase; s.Phase = Phase.Robber; s.Deadline = now + s.Timing.MandatoryMilliseconds; break;
             case CommandKind.PlayRoadBuilding:
                 Current(s, p, Phase.AwaitRoll, Phase.Action); Play(s, p, Card.RoadBuilding);
                 int remaining = 15 - s.Roads.Values.Count(x => x == p);
@@ -125,8 +133,8 @@ public sealed partial class GameEngine
                 Require(gi != ti && give[gi] == receive[ti] * Ratio(s, p, (Resource)gi), "Incorrect bank/port ratio.");
                 Pay(s, p, give); TakeBank(s, p, receive); break;
             case CommandKind.OfferTrade:
-                Current(s, p, Phase.Action); int to = Find(s, c.OtherPlayer ?? "");
-                Require(to >= 0 && to != p && !s.Players[to].Surrendered && s.Players[to].Connected, "Choose an available trading partner.");
+                Current(s,p,Phase.Action);int to=c.OtherPlayer==null?-1:Find(s,c.OtherPlayer);
+                Require(c.OtherPlayer==null?s.Players.Where((x,i)=>i!=p).Any(x=>x.Connected&&!x.Surrendered):to>=0&&to!=p&&!s.Players[to].Surrendered&&s.Players[to].Connected,"Choose an available trading partner.");
                 int[] offer = Bundle(c.Give), want = Bundle(c.Take);
                 Require(offer.Sum() > 0 && want.Sum() > 0 && !offer.Where((x, i) => x > 0 && want[i] > 0).Any(), "Trade distinct resource types in both directions.");
                 Require(Has(player, offer), "Insufficient offered resources.");
@@ -134,7 +142,7 @@ public sealed partial class GameEngine
             case CommandKind.AcceptTrade:
                 Require(s.Phase == Phase.Action, "Trading requires the action phase.");
                 var trade = s.Trades.FirstOrDefault(t => t.Id == c.Target);
-                Require(trade != null && trade.To == p && trade.From == s.Active, "No matching trade offer.");
+                Require(trade != null && (trade.To == p || trade.To == -1) && trade.From != p && trade.From == s.Active, "No matching trade offer.");
                 Require(!s.Players[trade!.From].Surrendered && s.Players[trade.From].Connected, "Offering player is unavailable.");
                 Require(Has(s.Players[trade.From], trade.Give) && Has(player, trade.Take), "Trade resources are no longer available.");
                 for (int i = 0; i < 5; i++) { s.Players[trade.From].Resources[i] += trade.Take[i] - trade.Give[i]; player.Resources[i] += trade.Give[i] - trade.Take[i]; }
